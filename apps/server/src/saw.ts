@@ -79,7 +79,7 @@ export async function enrichSawLink(url: string, userText: string | null): Promi
 
     const response = await client.messages
       .parse({
-        model: env.claudeModel,
+        model: env.sawModel,
         max_tokens: 2000,
         system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
         messages: [{ role: "user", content: sections.join("\n\n") }],

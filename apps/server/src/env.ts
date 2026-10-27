@@ -41,6 +41,8 @@ export const env = {
   hubAuth: process.env.HUB_AUTH === "1",
   devUserEmail: process.env.DEV_USER_EMAIL || null,
   claudeModel: process.env.CLAUDE_MODEL ?? "claude-haiku-5-5",
+  /** Saw summaries: a stronger model, because the Hebrew of the small one invents words. */
+  sawModel: process.env.SAW_MODEL ?? "claude-sonnet-5-5",
   openaiApiKey: process.env.OPENAI_API_KEY || null,
   ytdlpPath: process.env.YTDLP_PATH || "yt-dlp",
   ffmpegPath: process.env.FFMPEG_PATH || "ffmpeg",
