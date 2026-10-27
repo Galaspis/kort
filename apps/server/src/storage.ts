@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { env } from "./env.js";
 
-export type Bucket = "recipe-images" | "recipe-videos";
+export type Bucket = "recipe-images" | "recipe-videos" | "saw-images";
 
 function safe(objectPath: string) {
   const clean = objectPath.replace(/\\/g, "/").split("/").filter((p) => p && p !== "." && p !== "..").join("/");

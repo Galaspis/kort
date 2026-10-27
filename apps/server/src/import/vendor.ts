@@ -20,7 +20,7 @@ export class VendorError extends Error {
   }
 }
 
-export async function fetchViaVendor(url: string, platform: SourcePlatform, workDir: string): Promise<FetchedSource> {
+export async function fetchViaVendor(url: string, platform: SourcePlatform, workDir: string, keepVideo = true): Promise<FetchedSource> {
   if (!env.scrapeCreatorsKey) throw new VendorError("vendor key not configured");
   if (platform !== "facebook" && platform !== "instagram") throw new VendorError("platform not supported by vendor");
 
@@ -57,7 +57,7 @@ export async function fetchViaVendor(url: string, platform: SourcePlatform, work
   };
   if (!source.caption && !mapped.videoUrl) throw new VendorError("vendor returned no caption and no video");
 
-  if (mapped.videoUrl) {
+  if (keepVideo && mapped.videoUrl) {
     // CDN links expire within hours: download now while they are valid.
     source.videoPath = await download(mapped.videoUrl, workDir).catch((err) => {
       console.warn("[vendor] video download failed:", (err as Error).message);

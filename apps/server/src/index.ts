@@ -22,6 +22,7 @@ import { enrichManualRecipe, estimateNutrition } from "./import/extract.js";
 import { findStockImage } from "./import/image.js";
 import { runImport } from "./import/pipeline.js";
 import { fetchAndStoreVideo } from "./import/video.js";
+import { enrichSawLink } from "./saw.js";
 import { mediaRoot, saveMedia } from "./storage.js";
 
 type Variables = { caller: Caller };
@@ -413,6 +414,25 @@ app.post("/api/enrich", async (c) => {
   if (!parsed.success) return c.json({ error: "חסרים פרטים במתכון" }, 400);
   try { return c.json(await enrichManualRecipe(parsed.data)); }
   catch (err) { return c.json({ error: (err as Error).message }, 500); }
+});
+
+// ---------------------------------------------------------------------------
+// Saw: woodworking link-saver at woody.gallab.top/saw. Woody's Caddy proxies /api/saw/*
+// here, so the caller is the same family login. Links only: caption + thumbnail copy +
+// Hebrew summary go back to the page; nothing is written to Kort's database.
+// ---------------------------------------------------------------------------
+const sawBody = z.object({ url: z.string().max(4000), text: z.string().max(20_000).optional() });
+app.post("/api/saw/enrich", async (c) => {
+  const parsed = sawBody.safeParse(await c.req.json().catch(() => ({})));
+  const url = parsed.success ? extractFirstUrl(parsed.data.url) : null;
+  if (!url) return c.json({ error: "צריך קישור" }, 400);
+  try {
+    const result = await enrichSawLink(url, parsed.success ? parsed.data.text?.trim() || null : null);
+    if (result.thumbnail_url?.startsWith("/")) result.thumbnail_url = env.publicUrl + result.thumbnail_url;
+    return c.json(result);
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 502);
+  }
 });
 
 app.post("/api/recipes/:id/nutrition", async (c) => {

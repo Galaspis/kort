@@ -20,6 +20,10 @@ deploy/          Docker Compose, Caddy site and deploy notes for the hosted inst
 2. The server pulls the caption, thumbnail and (for short videos) the video with `yt-dlp`, samples frames with `ffmpeg`, optionally transcribes the audio, and asks Claude for a structured Hebrew recipe (translated if needed, with aisles, tags, timers).
 3. The recipe is saved to Postgres with the original link and the media on disk, so you can watch the video from inside the recipe.
 
+## Saw (links for Woody)
+
+`POST /api/saw/enrich { url, text? }` reuses the same fetcher (ScrapeCreators for Facebook/Instagram, yt-dlp, HTML fallback) but with `download: false`: no video, no database row. It returns caption, author, a thumbnail copy under `media/saw-images/` (served as `KORT_PUBLIC_URL/media/...`) and a short Hebrew woodworking summary (`apps/server/src/saw.ts`). Woody's Caddy site proxies `woody.gallab.top/api/saw/*` here, so the caller is the same family login.
+
 ## Identity
 
 There is no sign-up. The hosted instance sits behind a reverse proxy with Google sign-in, which sets a `Remote-Email` header on every request; the server maps that email to a user in the household (`HUB_AUTH=1`). Locally, leave `HUB_AUTH` unset and put your own address in `DEV_USER_EMAIL`.

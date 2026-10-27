@@ -32,6 +32,8 @@ export const env = {
   /** Where images and videos are kept, and the public base URL they are served from. */
   mediaDir: path.resolve(process.env.MEDIA_DIR ?? "media"),
   mediaBaseUrl: (process.env.MEDIA_BASE_URL ?? "/media").replace(/\/$/, ""),
+  /** Where Kort is reached from other gallab sites (Saw shows thumbnails from here). */
+  publicUrl: (process.env.KORT_PUBLIC_URL ?? "https://kort.gallab.top").replace(/\/$/, ""),
   /**
    * HUB_AUTH=1: the app sits behind the gallab login (Caddy + Tinyauth), which sets
    * Remote-Email on every request. Locally, DEV_USER_EMAIL plays that role.

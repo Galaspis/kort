@@ -36,7 +36,13 @@ function ytdlpBaseArgs(): string[] {
  * Strategy: yt-dlp first (covers Instagram, Facebook, TikTok, YouTube and
  * many others), then an HTML open-graph fallback for plain posts and blogs.
  */
-export async function fetchSource(url: string, workDir: string): Promise<FetchedSource> {
+export interface FetchOptions {
+  /** false = metadata, caption and thumbnail only; never pull the video file (used by the Saw link-saver). */
+  download?: boolean;
+}
+
+export async function fetchSource(url: string, workDir: string, opts: FetchOptions = {}): Promise<FetchedSource> {
+  const download = opts.download !== false;
   await mkdir(workDir, { recursive: true });
   const platform = detectPlatform(url);
 
@@ -52,14 +58,14 @@ export async function fetchSource(url: string, workDir: string): Promise<Fetched
   let vendorError: string | null = null;
   if ((platform === "facebook" || platform === "instagram") && env.scrapeCreatorsKey) {
     try {
-      return await fetchViaVendor(url, platform, workDir);
+      return await fetchViaVendor(url, platform, workDir, download);
     } catch (err) {
       vendorError = (err as Error).message;
       console.warn("[vendor] failed, falling back:", vendorError);
     }
   }
 
-  const viaYtdlp = await fetchWithYtdlp(url, platform, workDir);
+  const viaYtdlp = await fetchWithYtdlp(url, platform, workDir, download);
   if ("platform" in viaYtdlp) return viaYtdlp;
 
   const html = await fetchHtml(url, platform);
@@ -70,6 +76,7 @@ async function fetchWithYtdlp(
   url: string,
   platform: SourcePlatform,
   workDir: string,
+  download: boolean,
 ): Promise<FetchedSource | { error: string }> {
   let meta: Record<string, unknown>;
   try {
@@ -103,7 +110,7 @@ async function fetchWithYtdlp(
   };
 
   const looksLikeVideo = Boolean(meta.formats) || Boolean(meta.url) || duration !== null;
-  if (looksLikeVideo && (duration === null || duration <= MAX_VIDEO_SECONDS)) {
+  if (download && looksLikeVideo && (duration === null || duration <= MAX_VIDEO_SECONDS)) {
     source.videoPath = await downloadVideo(url, workDir);
   }
   return source;
