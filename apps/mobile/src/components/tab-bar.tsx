@@ -25,7 +25,7 @@ export interface TabBarProps {
 const ICONS: Record<string, { on: Icon; off: Icon; label: string }> = {
   index: { on: "restaurant", off: "restaurant-outline", label: "מתכונים" },
   shopping: { on: "cart", off: "cart-outline", label: "קניות" },
-  favorites: { on: "heart", off: "heart-outline", label: "הרשימה שלי" },
+  learn: { on: "school", off: "school-outline", label: "לימוד" },
   settings: { on: "settings", off: "settings-outline", label: "הגדרות" },
 };
 

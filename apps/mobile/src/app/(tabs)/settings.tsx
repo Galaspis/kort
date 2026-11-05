@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -93,14 +92,6 @@ export default function SettingsScreen() {
             )}
           </Card>
         ) : null}
-
-        <Card style={styles.card}>
-          <SectionTitle emoji="🎓">ללמוד לבשל</SectionTitle>
-          <AppText color="textSecondary">
-            24 שיעורים קצרים על מה שקורה בסיר ולמה: מלח, חום, שומן, חומצה, השחמה ועוד. עם ניסוי קטן למטבח ושאלון בכל שיעור.
-          </AppText>
-          <Button title="לקורס" icon="school-outline" variant="secondary" size="sm" onPress={() => router.push("/learn")} />
-        </Card>
 
         <Card style={styles.card}>
           <SectionTitle emoji="👨‍👩‍👧">המשפחה שלי</SectionTitle>

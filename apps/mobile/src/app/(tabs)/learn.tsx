@@ -3,6 +3,7 @@ import { FIXES, LESSONS, LEVELS, lessonById, type CourseLevel } from "@recipe/sh
 import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ActionSheet } from "@/components/action-sheet";
 import { AppText, Button, Card, Row, Screen } from "@/components/ui";
@@ -17,6 +18,7 @@ import { useLearnProgress, useResetLearning } from "@/lib/queries";
  */
 export default function LearnScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { data } = useLearnProgress();
   const reset = useResetLearning();
   const [fixOpen, setFixOpen] = useState(false);
@@ -42,7 +44,14 @@ export default function LearnScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + Spacing.md }]}>
+        <View>
+          <AppText variant="display">ללמוד לבשל</AppText>
+          <AppText variant="caption" color="textSecondary">
+            מה קורה בסיר, ולמה. 24 שיעורים קצרים, ניסוי לכל שיעור.
+          </AppText>
+        </View>
+
         {/* Progress */}
         <Card style={[styles.hero, { backgroundColor: theme.primarySoft, borderColor: "transparent" }]} flat>
           <Row style={{ gap: Spacing.md }}>
@@ -212,7 +221,7 @@ export default function LearnScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: Spacing.md, gap: Spacing.md, paddingBottom: 60 },
+  container: { padding: Spacing.md, gap: Spacing.md, paddingBottom: 120 },
   hero: { padding: Spacing.md, gap: Spacing.md },
   bar: { height: 8, borderRadius: 4, overflow: "hidden" },
   barFill: { height: 8, borderRadius: 4 },

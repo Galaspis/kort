@@ -20,7 +20,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: "מתכונים" }} />
       <Tabs.Screen name="shopping" options={{ title: "קניות" }} />
-      <Tabs.Screen name="favorites" options={{ title: "הרשימה שלי" }} />
+      <Tabs.Screen name="learn" options={{ title: "לימוד" }} />
       <Tabs.Screen name="settings" options={{ title: "הגדרות" }} />
     </Tabs>
   );
