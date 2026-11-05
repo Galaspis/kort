@@ -177,6 +177,8 @@ function Navigation() {
             name="recipe/[id]/video"
             options={{ title: "סרטון", presentation: "modal" }}
           />
+          <Stack.Screen name="learn/index" options={{ title: "ללמוד לבשל" }} />
+          <Stack.Screen name="learn/[id]" options={{ headerShown: false }} />
         </Stack.Protected>
         <Stack.Protected guard={!session}>
           <Stack.Screen name="sign-in" options={{ headerShown: false }} />

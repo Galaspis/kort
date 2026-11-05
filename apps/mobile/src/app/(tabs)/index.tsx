@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CATEGORIES } from "@recipe/shared";
-import { Link } from "expo-router";
+import { Link, router } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   FlatList,
@@ -29,7 +29,7 @@ import {
 import { CATEGORY_EMOJI, Fonts, Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { useInstallPrompt } from "@/lib/install";
-import { useRecipes, useSaveRecipe } from "@/lib/queries";
+import { useNextLesson, useRecipes, useSaveRecipe } from "@/lib/queries";
 
 /** "all" | "favorites" | "kids" | "cat:<category>" | "tag:<tag>" */
 type Filter = string;
@@ -52,6 +52,7 @@ export default function RecipesScreen() {
   const [filter, setFilter] = useState<Filter>("all");
   const [filterOpen, setFilterOpen] = useState(false);
   const installer = useInstallPrompt();
+  const lesson = useNextLesson();
 
   const recipes = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -174,6 +175,36 @@ export default function RecipesScreen() {
               </Pressable>
             </Row>
 
+            {lesson.loaded ? (
+              <Pressable
+                onPress={() =>
+                  router.push(
+                    lesson.next
+                      ? { pathname: "/learn/[id]", params: { id: lesson.next.id } }
+                      : "/learn",
+                  )
+                }
+                style={[styles.learnCard, { backgroundColor: theme.card, borderColor: theme.border }]}
+              >
+                <View style={[styles.learnEmoji, { backgroundColor: theme.primarySoft }]}>
+                  <AppText style={{ fontSize: 22 }}>{lesson.next?.emoji ?? "🎓"}</AppText>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppText variant="caption" color="primary">
+                    {lesson.next
+                      ? `ללמוד לבשל · שיעור ${lesson.next.number} מתוך 24`
+                      : "ללמוד לבשל"}
+                  </AppText>
+                  <AppText variant="label" numberOfLines={1}>
+                    {lesson.next ? lesson.next.title : "סיימתם את כל הקורס 🎉"}
+                  </AppText>
+                  <AppText variant="caption" color="textMuted" numberOfLines={1}>
+                    {lesson.next ? `${lesson.next.minutes} דקות · ${lesson.next.subtitle}` : "אפשר לחזור על כל שיעור"}
+                  </AppText>
+                </View>
+                <Ionicons name="chevron-back" size={18} color={theme.textMuted} />
+              </Pressable>
+            ) : null}
             {installer.canInstall && !installer.installed ? (
               <Pressable
                 onPress={() => installer.install()}
@@ -395,6 +426,15 @@ export default function RecipesScreen() {
 }
 
 const styles = StyleSheet.create({
+  learnCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm + 4,
+    padding: 10,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  learnEmoji: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   installBanner: {
     flexDirection: "row",
     alignItems: "center",

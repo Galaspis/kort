@@ -138,3 +138,16 @@ update shopping_items i
 
 drop trigger if exists shopping_lists_bump on shopping_lists;
 create trigger shopping_lists_bump after insert or update or delete on shopping_lists for each row execute function bump_household_version();
+
+-- ---------------------------------------------------------------------------
+-- Cooking course (added 2026-11-05): per-person lesson progress, and the
+-- "why it works" notes the model writes for a recipe (cached on the recipe).
+-- ---------------------------------------------------------------------------
+create table if not exists learning_progress (
+  user_id uuid not null references users (id) on delete cascade,
+  lesson_id text not null,
+  completed_at timestamptz not null default now(),
+  quiz_score integer,
+  primary key (user_id, lesson_id)
+);
+alter table recipes add column if not exists why jsonb;

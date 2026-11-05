@@ -130,3 +130,15 @@ for next time; finished lists stay as history (named by date, e.g. 19.10.26, or 
 - "לא היה בסופר" greys the item on this list and copies it to the next list.
 - "סיום קנייה" closes the list: bought and missing items stay as history, everything else moves
   to the next list.
+
+## Cooking course ("ללמוד לבשל")
+
+24 short Hebrew lessons in three levels (beginner, intermediate, advanced) about what happens in
+the pot and why: salt timing, heat, fat, acid, browning, spices, meat, sauces, baking, umami and
+so on. Content lives in packages/shared/src/course.ts (cards, a 5-minute kitchen experiment and a
+quiz per lesson, plus the "משהו חסר" fixer table). Screens: apps/mobile/src/app/learn/.
+
+- Progress is per person (`learning_progress` table), surfaced on the home screen as the next lesson.
+- Every recipe has a "למה זה עובד?" button under the steps: one Haiku call writes 3-5 notes about
+  the science of that dish, tied to lesson ids, cached in `recipes.why` (apps/server/src/learn.ts).
+- A lesson's last page lists the family's own recipes where the principle shows up (keyword match).

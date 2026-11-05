@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { lessonById } from "@recipe/shared";
 import type { Ingredient } from "@recipe/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
@@ -47,6 +48,7 @@ import {
   useAddShoppingItems,
   useDeleteRecipe,
   useRecipe,
+  useRecipeWhy,
   useSaveRecipe,
 } from "@/lib/queries";
 import { recipeToText, shareText, shareToWhatsApp } from "@/lib/share";
@@ -68,6 +70,7 @@ export default function RecipeScreen() {
   const save = useSaveRecipe();
   const remove = useDeleteRecipe();
   const addToList = useAddShoppingItems();
+  const why = useRecipeWhy(id!);
   const nutrition = useMutation({
     mutationFn: () => api.nutrition(id!),
     onSuccess: () => {
@@ -534,6 +537,59 @@ export default function RecipeScreen() {
                     </Row>
                   );
                 })}
+
+                <View style={{ gap: Spacing.sm, marginTop: Spacing.md }}>
+                  <AppText variant="heading">למה זה עובד?</AppText>
+                  {recipe.why?.length ? (
+                    <Card style={{ padding: Spacing.md, gap: Spacing.sm + 4 }}>
+                      {recipe.why.map((note, i) => {
+                        const lesson = note.lesson_id ? lessonById(note.lesson_id) : undefined;
+                        return (
+                          <View key={i} style={{ gap: 4 }}>
+                            <Row style={{ gap: Spacing.sm, alignItems: "flex-start" }}>
+                              <Text style={{ fontSize: 16, lineHeight: 24 }}>{lesson?.emoji ?? "💡"}</Text>
+                              <AppText style={{ flex: 1 }}>{note.text}</AppText>
+                            </Row>
+                            {lesson ? (
+                              <Pressable
+                                onPress={() => router.push({ pathname: "/learn/[id]", params: { id: lesson.id } })}
+                                style={{ alignSelf: "flex-start", marginStart: 28 }}
+                              >
+                                <AppText variant="caption" color="primary">
+                                  שיעור {lesson.number}: {lesson.title} ←
+                                </AppText>
+                              </Pressable>
+                            ) : null}
+                          </View>
+                        );
+                      })}
+                      <Pressable onPress={() => why.mutate(true)} disabled={why.isPending} style={{ alignSelf: "flex-end" }}>
+                        <AppText variant="caption" color="textMuted">
+                          {why.isPending ? "כותב מחדש..." : "לכתוב מחדש"}
+                        </AppText>
+                      </Pressable>
+                    </Card>
+                  ) : (
+                    <Card flat style={{ padding: Spacing.md, gap: Spacing.sm }}>
+                      <AppText color="textSecondary">
+                        שלוש-חמש הערות על המדע שמאחורי המתכון הזה: מתי המלח, למה ההשחמה, מה עושה הלימון בסוף.
+                      </AppText>
+                      <Button
+                        title="למה זה עובד?"
+                        icon="sparkles-outline"
+                        variant="secondary"
+                        size="sm"
+                        loading={why.isPending}
+                        onPress={() => why.mutate(false)}
+                      />
+                      {why.isError ? (
+                        <AppText variant="caption" color="danger">
+                          {(why.error as Error).message}
+                        </AppText>
+                      ) : null}
+                    </Card>
+                  )}
+                </View>
               </View>
             ) : null}
 

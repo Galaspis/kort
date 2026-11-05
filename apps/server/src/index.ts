@@ -18,6 +18,7 @@ import { resolveCaller, type Caller } from "./auth.js";
 import { migrate, one, q, setClause } from "./db.js";
 import { env } from "./env.js";
 import { backfillShoppingMeta, enrichShoppingItems } from "./grocery.js";
+import { explainRecipe } from "./learn.js";
 import { enrichManualRecipe, estimateNutrition } from "./import/extract.js";
 import { findStockImage } from "./import/image.js";
 import { runImport } from "./import/pipeline.js";
@@ -79,7 +80,7 @@ const RECIPE_COLS = [
   "original_language","confidence","warnings","source_url","source_platform","video_url","thumbnail_url","author","caption",
   "image_url","notes","rating","times_cooked","is_favorite","nutrition","kids_approved",
 ] as const;
-const RECIPE_JSON = ["ingredients", "steps", "nutrition"] as const;
+const RECIPE_JSON = ["ingredients", "steps", "nutrition", "why"] as const;
 
 app.get("/api/recipes", async (c) => {
   const caller = c.get("caller");
@@ -347,6 +348,53 @@ app.post("/api/shopping/delete", async (c) => {
   if (!body.success) return c.json({ error: "bad request" }, 400);
   await q("delete from shopping_items where household_id = $1 and id = any($2::uuid[])", [caller.householdId, body.data.ids]);
   return c.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// Cooking course: per-person progress, and "why it works" notes per recipe
+// ---------------------------------------------------------------------------
+app.get("/api/learn/progress", async (c) => {
+  const caller = c.get("caller");
+  const rows = await q<{ lesson_id: string; completed_at: string; quiz_score: number | null }>(
+    "select lesson_id, completed_at, quiz_score from learning_progress where user_id = $1 order by completed_at",
+    [caller.userId],
+  );
+  return c.json(rows);
+});
+
+app.post("/api/learn/progress", async (c) => {
+  const caller = c.get("caller");
+  const body = z
+    .object({ lesson_id: z.string().min(1).max(40), quiz_score: z.number().int().min(0).max(100).nullable().optional() })
+    .safeParse(await c.req.json().catch(() => null));
+  if (!body.success) return c.json({ error: "bad request" }, 400);
+  await q(
+    `insert into learning_progress (user_id, lesson_id, quiz_score) values ($1, $2, $3)
+     on conflict (user_id, lesson_id) do update set completed_at = now(), quiz_score = coalesce(excluded.quiz_score, learning_progress.quiz_score)`,
+    [caller.userId, body.data.lesson_id, body.data.quiz_score ?? null],
+  );
+  return c.json({ ok: true });
+});
+
+app.delete("/api/learn/progress", async (c) => {
+  const caller = c.get("caller");
+  await q("delete from learning_progress where user_id = $1", [caller.userId]);
+  return c.json({ ok: true });
+});
+
+/** Writes (once) and returns the "why it works" notes for a recipe. `?force=1` rewrites them. */
+app.post("/api/recipes/:id/why", async (c) => {
+  const caller = c.get("caller");
+  const recipe = await one<RecipeRow>("select * from recipes where id = $1 and household_id = $2", [c.req.param("id"), caller.householdId]);
+  if (!recipe) return c.json({ error: "not found" }, 404);
+  if (recipe.why?.length && c.req.query("force") !== "1") return c.json({ why: recipe.why });
+  try {
+    const why = await explainRecipe(recipe);
+    await q("update recipes set why = $1 where id = $2", [JSON.stringify(why), recipe.id]);
+    return c.json({ why });
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 502);
+  }
 });
 
 // ---------------------------------------------------------------------------

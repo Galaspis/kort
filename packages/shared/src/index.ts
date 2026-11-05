@@ -113,8 +113,16 @@ export interface RecipeSource {
 }
 
 /** Row shape of the `recipes` table (jsonb columns typed). */
+/** One "why it works" note the model wrote for a recipe, tied to a course lesson when one fits. */
+export interface WhyNote {
+  text: string;
+  lesson_id: string | null;
+}
+
 export interface RecipeRow extends RecipeContent, RecipeSource {
   id: string;
+  /** Cached "למה זה עובד?" notes; null until asked for. */
+  why: WhyNote[] | null;
   household_id: string;
   created_by: string | null;
   image_url: string | null;
@@ -259,3 +267,4 @@ export function normalizeRecipeContent(ai: RecipeAIOutput): RecipeContent {
     })),
   };
 }
+export * from "./course";

@@ -1,4 +1,5 @@
 import type { Aisle, Ingredient, RecipeContent, RecipeRow, ShoppingItemRow, ShoppingListRow } from "@recipe/shared";
+import { LESSONS } from "@recipe/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { AppState, Platform } from "react-native";
@@ -12,6 +13,7 @@ export const keys = {
   shoppingLists: ["shopping", "lists"] as const,
   shoppingItems: (listId: string | null) => ["shopping", "items", listId ?? "current"] as const,
   profile: ["profile"] as const,
+  learn: ["learn"] as const,
 };
 
 /**
@@ -215,6 +217,48 @@ export function useFinishShoppingList() {
   return useMutation({
     mutationFn: (id: string) => api.finishShoppingList(id),
     onSuccess: () => client.invalidateQueries({ queryKey: keys.shopping }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Cooking course
+// ---------------------------------------------------------------------------
+export function useLearnProgress() {
+  return useQuery({ queryKey: keys.learn, queryFn: api.learnProgress });
+}
+
+/** The first lesson not yet completed (course order), or null when all are done. */
+export function useNextLesson() {
+  const { data } = useLearnProgress();
+  const done = new Set((data ?? []).map((p) => p.lesson_id));
+  return { next: LESSONS.find((l) => !done.has(l.id)) ?? null, doneCount: done.size, loaded: data !== undefined };
+}
+
+export function useCompleteLesson() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ lessonId, score }: { lessonId: string; score: number | null }) => api.completeLesson(lessonId, score),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.learn }),
+  });
+}
+
+export function useResetLearning() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.resetLearning(),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.learn }),
+  });
+}
+
+/** Asks the server for (or rewrites) a recipe's "why it works" notes and stores them on the cached recipe. */
+export function useRecipeWhy(recipeId: string) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (force?: boolean) => api.recipeWhy(recipeId, force),
+    onSuccess: ({ why }) => {
+      client.setQueryData<RecipeRow>(keys.recipe(recipeId), (old) => (old ? { ...old, why } : old));
+      client.invalidateQueries({ queryKey: keys.recipes });
+    },
   });
 }
 

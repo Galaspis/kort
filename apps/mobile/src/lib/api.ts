@@ -1,4 +1,4 @@
-import type { ImportJobRow, Nutrition, RecipeContent, RecipeRow, ShoppingItemRow, ShoppingListRow, ShoppingListSummary } from "@recipe/shared";
+import type { ImportJobRow, Nutrition, RecipeContent, RecipeRow, ShoppingItemRow, ShoppingListRow, ShoppingListSummary, WhyNote } from "@recipe/shared";
 
 import { env } from "./env";
 
@@ -25,6 +25,12 @@ export class UnauthorizedError extends Error {
     super("לא מחובר");
     this.name = "UnauthorizedError";
   }
+}
+
+export interface LessonProgress {
+  lesson_id: string;
+  completed_at: string;
+  quiz_score: number | null;
 }
 
 export interface Me {
@@ -78,6 +84,12 @@ export const api = {
   nutrition: (recipeId: string) => request<Nutrition>(`/api/recipes/${recipeId}/nutrition`, { method: "POST" }),
   fetchVideo: (recipeId: string) => request<{ video_url: string }>(`/api/recipes/${recipeId}/video`, { method: "POST" }),
   findImage: (recipeId: string) => request<{ image_url: string | null }>(`/api/recipes/${recipeId}/image`, { method: "POST" }),
+  learnProgress: () => request<LessonProgress[]>("/api/learn/progress"),
+  completeLesson: (lesson_id: string, quiz_score: number | null) =>
+    request<{ ok: true }>("/api/learn/progress", { method: "POST", body: JSON.stringify({ lesson_id, quiz_score }) }),
+  resetLearning: () => request<{ ok: true }>("/api/learn/progress", { method: "DELETE" }),
+  recipeWhy: (recipeId: string, force = false) =>
+    request<{ why: WhyNote[] }>(`/api/recipes/${recipeId}/why${force ? "?force=1" : ""}`, { method: "POST" }),
   health: async () => {
     const res = await fetch(`${API_URL}/health`);
     return res.ok;
