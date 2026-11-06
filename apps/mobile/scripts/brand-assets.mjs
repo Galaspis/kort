@@ -18,6 +18,7 @@ await Promise.all([brand, images, pub].map((d) => mkdir(d, { recursive: true }))
 // Logo for the home header
 await copyFile(path.join(src, "logo/kort-logo-640.png"), path.join(brand, "kort-logo.png"));
 await copyFile(bird, path.join(brand, "kort-bird.png"));
+await copyFile(path.join(src, "logo/kort-logo-640.png"), path.join(pub, "logo.png")); // public: used in the daily email
 
 /** A square icon: the bird scaled to `fill` of the side, centred, on cream (or transparent). */
 async function icon(side, fill, background = CREAM) {

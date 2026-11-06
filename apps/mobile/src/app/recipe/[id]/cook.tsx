@@ -32,6 +32,7 @@ import {
   scaleIngredient,
 } from "@/lib/format";
 import { goBack } from "@/lib/navigation";
+import { useHoldScreenOn } from "@/lib/screen-on";
 import { useMarkCooked, useRecipe } from "@/lib/queries";
 
 /**
@@ -40,6 +41,7 @@ import { useMarkCooked, useRecipe } from "@/lib/queries";
  */
 export default function CookScreen() {
   useKeepAwake();
+  useHoldScreenOn();
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { id, servings } = useLocalSearchParams<{

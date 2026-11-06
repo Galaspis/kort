@@ -19,7 +19,7 @@ kort.gallab.top {
 
         # Icons and the web manifest are public: phones fetch them WITHOUT the login cookie when
         # adding the site to the home screen, and would otherwise show a letter instead of an icon.
-        @public path /manifest.json /icon.png /icon-192.png /icon-512.png /icon-maskable-512.png /apple-touch-icon.png /favicon-16.png /favicon-32.png
+        @public path /manifest.json /logo.png /icon.png /icon-192.png /icon-512.png /icon-maskable-512.png /apple-touch-icon.png /favicon-16.png /favicon-32.png
         handle @public {
             header Cache-Control "public, max-age=86400"
             reverse_proxy 127.0.0.1:8787

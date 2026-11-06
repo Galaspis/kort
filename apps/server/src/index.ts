@@ -54,14 +54,26 @@ app.get("/api/me", async (c) => {
     [caller.householdId],
   );
   const household = await one<{ id: string; name: string }>("select id, name from households where id = $1", [caller.householdId]);
-  return c.json({ id: caller.userId, email: caller.email, display_name: caller.displayName, household, members });
+  const prefs = await one<{ daily_lesson_email: boolean }>("select daily_lesson_email from users where id = $1", [caller.userId]);
+  return c.json({
+    id: caller.userId,
+    email: caller.email,
+    display_name: caller.displayName,
+    household,
+    members,
+    daily_lesson_email: prefs?.daily_lesson_email ?? false,
+  });
 });
 
 app.patch("/api/me", async (c) => {
   const caller = c.get("caller");
-  const body = z.object({ display_name: z.string().trim().min(1).max(60) }).safeParse(await c.req.json().catch(() => ({})));
-  if (!body.success) return c.json({ error: "שם לא תקין" }, 400);
-  await q("update users set display_name = $1 where id = $2", [body.data.display_name, caller.userId]);
+  const body = z
+    .object({ display_name: z.string().trim().min(1).max(60).optional(), daily_lesson_email: z.boolean().optional() })
+    .safeParse(await c.req.json().catch(() => ({})));
+  if (!body.success) return c.json({ error: "ערך לא תקין" }, 400);
+  if (body.data.display_name !== undefined) await q("update users set display_name = $1 where id = $2", [body.data.display_name, caller.userId]);
+  if (body.data.daily_lesson_email !== undefined)
+    await q("update users set daily_lesson_email = $1 where id = $2", [body.data.daily_lesson_email, caller.userId]);
   return c.json({ ok: true });
 });
 

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet, Switch, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
@@ -18,7 +18,8 @@ import { Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { api, API_URL } from "@/lib/api";
 import { dialog } from "@/lib/dialog";
-import { useProfile, useUpdateDisplayName } from "@/lib/queries";
+import { useDailyLessonEmail, useProfile, useUpdateDisplayName } from "@/lib/queries";
+import { useScreenOn } from "@/lib/screen-on";
 import { useInstallPrompt } from "@/lib/install";
 import { useAuth } from "@/providers/auth";
 
@@ -31,6 +32,8 @@ export default function SettingsScreen() {
   const [nameDraft, setName] = useState<string | null>(null);
   const [serverOk, setServerOk] = useState<boolean | null>(null);
   const installer = useInstallPrompt();
+  const screen = useScreenOn();
+  const dailyEmail = useDailyLessonEmail();
 
   useEffect(() => {
     api
@@ -92,6 +95,45 @@ export default function SettingsScreen() {
             )}
           </Card>
         ) : null}
+
+        <Card style={styles.card}>
+          <SectionTitle emoji="🔆">המסך נשאר דולק</SectionTitle>
+          <Row style={{ gap: Spacing.md, justifyContent: "space-between" }}>
+            <View style={{ flex: 1 }}>
+              <AppText>בכל האפליקציה: מתכונים, מצרכים, שיעורים</AppText>
+              <AppText variant="caption" color="textSecondary">
+                {screen.supported
+                  ? "המסך לא יכבה כל עוד קורט פתוח. מצב הבישול שומר על המסך גם בלי זה."
+                  : "הדפדפן הזה לא תומך בזה. במצב בישול המסך בכל זאת נשאר דולק."}
+              </AppText>
+            </View>
+            <Switch
+              value={screen.on}
+              onValueChange={screen.setOn}
+              disabled={!screen.supported}
+              trackColor={{ true: theme.primary, false: theme.beige }}
+              thumbColor="#fff"
+            />
+          </Row>
+        </Card>
+
+        <Card style={styles.card}>
+          <SectionTitle emoji="📬">שיעור יומי במייל</SectionTitle>
+          <Row style={{ gap: Spacing.md, justifyContent: "space-between" }}>
+            <View style={{ flex: 1 }}>
+              <AppText>כל בוקר שיעור אחד מהקורס ל-{session?.user.email}</AppText>
+              <AppText variant="caption" color="textSecondary">
+                בסביבות 07:00. תמיד השיעור הבא שעוד לא סיימתם באפליקציה.
+              </AppText>
+            </View>
+            <Switch
+              value={data.daily_lesson_email}
+              onValueChange={(on) => dailyEmail.mutate(on)}
+              trackColor={{ true: theme.primary, false: theme.beige }}
+              thumbColor="#fff"
+            />
+          </Row>
+        </Card>
 
         <Card style={styles.card}>
           <SectionTitle emoji="👨‍👩‍👧">המשפחה שלי</SectionTitle>

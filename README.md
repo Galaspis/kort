@@ -144,3 +144,14 @@ stay reachable through the home-screen filter); one lesson is apps/mobile/src/ap
 - Every recipe has a "למה זה עובד?" button under the steps: one Haiku call writes 3-5 notes about
   the science of that dish, tied to lesson ids, cached in `recipes.why` (apps/server/src/learn.ts).
 - A lesson's last page lists the family's own recipes where the principle shows up (keyword match).
+
+## Screen stays on, and the lesson of the day by email
+
+- `apps/mobile/src/lib/screen-on.ts` keeps the screen on with the browser's Wake Lock and asks
+  for it again every time the app comes back to the foreground (the browser releases it on
+  every background). Cooking mode always holds it; the "המסך נשאר דולק" switch in Settings
+  (also in a recipe's ⋯ menu) keeps it on across the whole app. Per-device preference.
+- "שיעור יומי במייל" (Settings) sets `users.daily_lesson_email`. Every morning the gallab-hub
+  workflow `daily-lesson.yml` runs `apps/server/scripts/daily-lesson.ts` inside the container
+  (next lesson not finished and not yet sent, recorded in `lesson_emails`) and emails the
+  rendered lesson with the hub's mail secrets. The email uses the public /logo.png.

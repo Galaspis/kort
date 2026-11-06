@@ -151,3 +151,12 @@ create table if not exists learning_progress (
   primary key (user_id, lesson_id)
 );
 alter table recipes add column if not exists why jsonb;
+
+-- Daily lesson by email (added 2026-11-06): who wants it, and what was already sent.
+alter table users add column if not exists daily_lesson_email boolean not null default false;
+create table if not exists lesson_emails (
+  user_id uuid not null references users (id) on delete cascade,
+  lesson_id text not null,
+  sent_at timestamptz not null default now()
+);
+create unique index if not exists lesson_emails_user_lesson_idx on lesson_emails (user_id, lesson_id);

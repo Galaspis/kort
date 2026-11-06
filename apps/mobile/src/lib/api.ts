@@ -39,11 +39,13 @@ export interface Me {
   display_name: string | null;
   household: { id: string; name: string } | null;
   members: { id: string; display_name: string | null }[];
+  daily_lesson_email: boolean;
 }
 
 export const api = {
   me: () => request<Me>("/api/me"),
-  updateMe: (display_name: string) => request<{ ok: true }>("/api/me", { method: "PATCH", body: JSON.stringify({ display_name }) }),
+  updateMe: (patch: { display_name?: string; daily_lesson_email?: boolean }) =>
+    request<{ ok: true }>("/api/me", { method: "PATCH", body: JSON.stringify(patch) }),
   version: () => request<{ version: number }>("/api/version"),
 
   recipes: () => request<RecipeRow[]>("/api/recipes"),

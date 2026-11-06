@@ -271,6 +271,7 @@ export interface ProfileInfo {
   display_name: string | null;
   household: { id: string; name: string } | null;
   members: { id: string; display_name: string | null }[];
+  daily_lesson_email: boolean;
 }
 
 export function useProfile() {
@@ -280,8 +281,21 @@ export function useProfile() {
 export function useUpdateDisplayName() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (display_name: string) => api.updateMe(display_name),
+    mutationFn: (display_name: string) => api.updateMe({ display_name }),
     onSuccess: () => client.invalidateQueries({ queryKey: keys.profile }),
+  });
+}
+
+/** "שיעור יומי במייל" on/off (optimistic, so the switch moves at once). */
+export function useDailyLessonEmail() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (on: boolean) => api.updateMe({ daily_lesson_email: on }),
+    onMutate: async (on) => {
+      await client.cancelQueries({ queryKey: keys.profile });
+      client.setQueryData<ProfileInfo>(keys.profile, (old) => (old ? { ...old, daily_lesson_email: on } : old));
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: keys.profile }),
   });
 }
 

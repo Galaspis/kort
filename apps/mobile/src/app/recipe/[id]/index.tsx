@@ -52,6 +52,7 @@ import {
   useSaveRecipe,
 } from "@/lib/queries";
 import { recipeToText, shareText, shareToWhatsApp } from "@/lib/share";
+import { useScreenOn } from "@/lib/screen-on";
 import { embedUrl, PLATFORM_LABEL } from "@/lib/video";
 
 type Tab = "steps" | "ingredients" | "notes";
@@ -71,6 +72,7 @@ export default function RecipeScreen() {
   const remove = useDeleteRecipe();
   const addToList = useAddShoppingItems();
   const why = useRecipeWhy(id!);
+  const screen = useScreenOn();
   const nutrition = useMutation({
     mutationFn: () => api.nutrition(id!),
     onSuccess: () => {
@@ -808,6 +810,11 @@ export default function RecipeScreen() {
                   icon: "cart-outline",
                   label: "הוספת המצרכים לרשימת הקניות",
                   run: addIngredientsToList,
+                },
+                {
+                  icon: screen.on ? "sunny" : "sunny-outline",
+                  label: screen.on ? "המסך נשאר דולק: פועל (לכבות)" : "המסך נשאר דולק: כבוי (להדליק)",
+                  run: () => screen.setOn(!screen.on),
                 },
                 {
                   icon: "create-outline",
