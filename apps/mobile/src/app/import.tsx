@@ -56,7 +56,7 @@ const STAGES: Record<
 
 export default function ImportScreen() {
   const theme = useTheme();
-  const routeParams = useLocalSearchParams<{ url?: string; text?: string }>();
+  const routeParams = useLocalSearchParams<{ url?: string; text?: string; planDate?: string; planMeal?: string; planCourse?: string }>();
   // On the web the link may arrive unencoded from an iOS Shortcut
   // (…/import?url=https://facebook.com/watch?v=1&ref=x), which the router
   // would cut at the first "&". Read everything after "url=" ourselves.
@@ -111,13 +111,20 @@ export default function ImportScreen() {
     if (job.data?.status === "done" && job.data.recipe_id) {
       queryClient.invalidateQueries({ queryKey: ["recipes"] });
       const id = job.data.recipe_id;
-      const t = setTimeout(
-        () => router.replace({ pathname: "/recipe/[id]", params: { id } }),
-        900,
-      );
+      const { planDate, planMeal, planCourse } = routeParams;
+      const t = setTimeout(async () => {
+        if (planDate && planMeal && planCourse) {
+          // Started from the planner: put the new recipe in its slot and go back there.
+          await api.addPlan({ date: planDate, meal: planMeal, course: planCourse, recipe_id: id }).catch(() => undefined);
+          queryClient.invalidateQueries({ queryKey: ["plan"] });
+          router.replace("/plan");
+          return;
+        }
+        router.replace({ pathname: "/recipe/[id]", params: { id } });
+      }, 900);
       return () => clearTimeout(t);
     }
-  }, [job.data, queryClient]);
+  }, [job.data, queryClient, routeParams]);
 
   // Android without the share sheet: "Copy link" in Facebook, then this button.
   async function pasteAndImport() {

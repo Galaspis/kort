@@ -4,6 +4,7 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import { logger } from "hono/logger";
+import pg from "pg";
 import { z } from "zod";
 import {
   classifyGrocery,
@@ -13,12 +14,14 @@ import {
   type ShoppingItemRow,
   type ShoppingListRow,
   type ShoppingListSummary,
+  type MealPlanRow,
 } from "@recipe/shared";
 import { resolveCaller, type Caller } from "./auth.js";
 import { migrate, one, q, setClause } from "./db.js";
 import { env } from "./env.js";
 import { backfillShoppingMeta, enrichShoppingItems } from "./grocery.js";
 import { explainRecipe } from "./learn.js";
+import { COURSE_IDS, MEAL_IDS, suggestForSlot } from "./plan.js";
 import { enrichManualRecipe, estimateNutrition } from "./import/extract.js";
 import { findStockImage } from "./import/image.js";
 import { runImport } from "./import/pipeline.js";
@@ -404,6 +407,139 @@ app.post("/api/recipes/:id/why", async (c) => {
     const why = await explainRecipe(recipe);
     await q("update recipes set why = $1 where id = $2", [JSON.stringify(why), recipe.id]);
     return c.json({ why });
+  } catch (err) {
+    return c.json({ error: (err as Error).message }, 502);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Meal planner
+// ---------------------------------------------------------------------------
+const DATE = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const planEntry = z.object({
+  date: DATE,
+  meal: z.enum(MEAL_IDS as unknown as [string, ...string[]]),
+  course: z.enum(COURSE_IDS as unknown as [string, ...string[]]),
+  recipe_id: z.string().uuid().nullable().optional(),
+  title: z.string().trim().max(200).nullable().optional(),
+  servings: z.number().positive().max(100).nullable().optional(),
+  note: z.string().trim().max(500).nullable().optional(),
+});
+const PLAN_COLS = ["date", "meal", "course", "recipe_id", "title", "servings", "note", "position"] as const;
+
+// Postgres `date` → "YYYY-MM-DD" (not a timestamp in the server's zone)
+pg.types.setTypeParser(1082, (v) => v);
+
+app.get("/api/plan", async (c) => {
+  const caller = c.get("caller");
+  const from = c.req.query("from");
+  const to = c.req.query("to");
+  if (!from || !to || !DATE.safeParse(from).success || !DATE.safeParse(to).success) return c.json({ error: "bad request" }, 400);
+  const rows = await q<MealPlanRow>(
+    "select * from meal_plans where household_id = $1 and date between $2 and $3 order by date, position, created_at",
+    [caller.householdId, from, to],
+  );
+  return c.json(rows);
+});
+
+app.post("/api/plan", async (c) => {
+  const caller = c.get("caller");
+  const body = planEntry.safeParse(await c.req.json().catch(() => null));
+  if (!body.success) return c.json({ error: "bad request" }, 400);
+  const e = body.data;
+  if (!e.recipe_id && !e.title?.trim()) return c.json({ error: "צריך מתכון או טקסט" }, 400);
+  const pos = await one<{ n: number }>("select count(*)::int as n from meal_plans where household_id = $1 and date = $2 and meal = $3", [
+    caller.householdId,
+    e.date,
+    e.meal,
+  ]);
+  const row = await one<MealPlanRow>(
+    `insert into meal_plans (household_id, date, meal, course, recipe_id, title, servings, note, position, created_by)
+     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *`,
+    [caller.householdId, e.date, e.meal, e.course, e.recipe_id ?? null, e.title?.trim() || null, e.servings ?? null, e.note?.trim() || null, pos?.n ?? 0, caller.userId],
+  );
+  return c.json(row);
+});
+
+app.patch("/api/plan/:id", async (c) => {
+  const caller = c.get("caller");
+  const patch = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+  const set = patch && setClause(patch, PLAN_COLS);
+  if (!set) return c.json({ error: "bad request" }, 400);
+  const row = await one<MealPlanRow>(
+    `update meal_plans set ${set.sql} where id = $${set.next} and household_id = $${set.next + 1} returning *`,
+    [...set.values, c.req.param("id"), caller.householdId],
+  );
+  return row ? c.json(row) : c.json({ error: "not found" }, 404);
+});
+
+app.delete("/api/plan/:id", async (c) => {
+  const caller = c.get("caller");
+  await q("delete from meal_plans where id = $1 and household_id = $2", [c.req.param("id"), caller.householdId]);
+  return c.json({ ok: true });
+});
+
+/** Copies every entry of one week (Sunday start) onto another week. */
+app.post("/api/plan/copy", async (c) => {
+  const caller = c.get("caller");
+  const body = z.object({ from: DATE, to: DATE }).safeParse(await c.req.json().catch(() => null));
+  if (!body.success) return c.json({ error: "bad request" }, 400);
+  const rows = await q<{ n: number }>(
+    `insert into meal_plans (household_id, date, meal, course, recipe_id, title, servings, note, position, created_by)
+     select household_id, date + ($3::date - $2::date), meal, course, recipe_id, title, servings, note, position, $4
+     from meal_plans where household_id = $1 and date between $2::date and $2::date + 6
+     returning 1 as n`,
+    [caller.householdId, body.data.from, body.data.to, caller.userId],
+  );
+  return c.json({ copied: rows.length });
+});
+
+/** "תציע לי": up to three of the family's recipes for a slot, plus one new idea. */
+app.post("/api/plan/suggest", async (c) => {
+  const caller = c.get("caller");
+  const body = z
+    .object({ date: DATE, meal: z.string(), course: z.string(), hint: z.string().trim().max(200).nullable().optional() })
+    .safeParse(await c.req.json().catch(() => null));
+  if (!body.success) return c.json({ error: "bad request" }, 400);
+  const recipes = await q<{
+    id: string;
+    title: string;
+    category: string;
+    tags: string[];
+    prep_minutes: number | null;
+    cook_minutes: number | null;
+    rating: number | null;
+    kids_approved: boolean | null;
+    times_cooked: number;
+  }>("select id, title, category, tags, prep_minutes, cook_minutes, rating, kids_approved, times_cooked from recipes where household_id = $1", [
+    caller.householdId,
+  ]);
+  if (!recipes.length) return c.json({ picks: [], new_idea: null });
+  const week = await q<{ title: string | null; recipe_id: string | null }>(
+    "select title, recipe_id from meal_plans where household_id = $1 and date between ($2::date - 6) and ($2::date + 6)",
+    [caller.householdId, body.data.date],
+  );
+  const byId = new Map(recipes.map((r) => [r.id, r.title]));
+  const planned = week.map((w) => w.title ?? (w.recipe_id ? byId.get(w.recipe_id) : null)).filter((t): t is string => Boolean(t));
+  try {
+    const out = await suggestForSlot({
+      date: body.data.date,
+      meal: body.data.meal,
+      course: body.data.course,
+      hint: body.data.hint ?? null,
+      planned,
+      recipes: recipes.map((r) => ({
+        id: r.id,
+        title: r.title,
+        category: r.category,
+        tags: r.tags,
+        minutes: r.prep_minutes || r.cook_minutes ? (r.prep_minutes ?? 0) + (r.cook_minutes ?? 0) : null,
+        rating: r.rating,
+        kids_approved: r.kids_approved,
+        times_cooked: r.times_cooked,
+      })),
+    });
+    return c.json(out);
   } catch (err) {
     return c.json({ error: (err as Error).message }, 502);
   }

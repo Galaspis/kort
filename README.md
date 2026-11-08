@@ -155,3 +155,20 @@ stay reachable through the home-screen filter); one lesson is apps/mobile/src/ap
   workflow `daily-lesson.yml` runs `apps/server/scripts/daily-lesson.ts` inside the container
   (next lesson not finished and not yet sent, recorded in `lesson_emails`) and emails the
   rendered lesson with the hub's mail secrets. The email uses the public /logo.png.
+
+## Meal planner ("תכנון")
+
+A week at a time (Sunday–Saturday). Each day has meals (ארוחת בוקר, צהריים, ארוחת ערב, ערב שישי,
+שבת, בישול מראש) and each meal has courses (סלט, מנה ראשונה, מרק, עיקרית, תוספת, לחם ומאפה, קינוח,
+משקה). An entry is a Kort recipe (course taken from its category) or a free-text line.
+Model in packages/shared/src/plan.ts, screen apps/mobile/src/app/(tabs)/plan.tsx, table `meal_plans`.
+
+- Add to a slot: from my recipes (search + course filter), "תציע לי" (Haiku picks up to three of the
+  family's recipes for that slot and one new idea; apps/server/src/plan.ts), a free line, or an import
+  from a link that lands in the slot when done.
+- "המצרכים של השבוע לרשימת הקניות": ingredients of every planned recipe, scaled to the planned
+  servings, merged into the current shopping list. Also "3 הימים הקרובים".
+- A note on an entry ("להתחיל בצק בלילה") also shows on the day before.
+- From a recipe page: "⋯ → לתכנון" picks a day and meal. Copy last week; clear the week.
+- Settings moved out of the bottom menu to a gear on the home screen so the four tabs stay
+  symmetric: מתכונים, תכנון | + | קניות, לימוד.

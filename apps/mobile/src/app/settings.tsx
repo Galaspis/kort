@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { ScrollView, StyleSheet, Switch, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   AppText,
@@ -25,7 +24,6 @@ import { useAuth } from "@/providers/auth";
 
 export default function SettingsScreen() {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const { session, signOut } = useAuth();
   const { data, isLoading } = useProfile();
   const rename = useUpdateDisplayName();
@@ -57,7 +55,7 @@ export default function SettingsScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.container,
-          { paddingTop: insets.top + Spacing.md },
+          { paddingTop: Spacing.md },
         ]}
       >
         <Row style={{ gap: Spacing.md }}>

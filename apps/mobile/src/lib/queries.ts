@@ -1,10 +1,10 @@
-import type { Aisle, Ingredient, RecipeContent, RecipeRow, ShoppingItemRow, ShoppingListRow } from "@recipe/shared";
+import type { Aisle, Ingredient, MealPlanRow, RecipeContent, RecipeRow, ShoppingItemRow, ShoppingListRow } from "@recipe/shared";
 import { LESSONS } from "@recipe/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { AppState, Platform } from "react-native";
 
-import { api } from "./api";
+import { api, type NewPlanEntry } from "./api";
 
 export const keys = {
   recipes: ["recipes"] as const,
@@ -14,6 +14,8 @@ export const keys = {
   shoppingItems: (listId: string | null) => ["shopping", "items", listId ?? "current"] as const,
   profile: ["profile"] as const,
   learn: ["learn"] as const,
+  plan: ["plan"] as const,
+  planWeek: (from: string, to: string) => ["plan", from, to] as const,
 };
 
 /**
@@ -34,6 +36,7 @@ export function useRealtimeSync(enabled: boolean) {
         if (last.current !== null && version !== last.current) {
           client.invalidateQueries({ queryKey: keys.recipes });
           client.invalidateQueries({ queryKey: keys.shopping });
+          client.invalidateQueries({ queryKey: keys.plan });
         }
         last.current = version;
       } catch {
@@ -259,6 +262,49 @@ export function useRecipeWhy(recipeId: string) {
       client.setQueryData<RecipeRow>(keys.recipe(recipeId), (old) => (old ? { ...old, why } : old));
       client.invalidateQueries({ queryKey: keys.recipes });
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Meal planner
+// ---------------------------------------------------------------------------
+export function usePlan(from: string, to: string) {
+  return useQuery({ queryKey: keys.planWeek(from, to), queryFn: () => api.plan(from, to) });
+}
+
+export function useAddPlanEntry() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (entry: NewPlanEntry) => api.addPlan(entry),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.plan }),
+  });
+}
+
+export function useUpdatePlanEntry() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: Partial<NewPlanEntry> & { position?: number } }) => api.updatePlan(id, patch),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.plan }),
+  });
+}
+
+export function useDeletePlanEntry() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deletePlan(id),
+    onMutate: async (id) => {
+      await client.cancelQueries({ queryKey: keys.plan });
+      client.setQueriesData<MealPlanRow[]>({ queryKey: keys.plan }, (old) => old?.filter((e) => e.id !== id));
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: keys.plan }),
+  });
+}
+
+export function useCopyPlanWeek() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ from, to }: { from: string; to: string }) => api.copyPlanWeek(from, to),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.plan }),
   });
 }
 

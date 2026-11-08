@@ -160,3 +160,25 @@ create table if not exists lesson_emails (
   sent_at timestamptz not null default now()
 );
 create unique index if not exists lesson_emails_user_lesson_idx on lesson_emails (user_id, lesson_id);
+
+-- Meal planner (added 2026-11-08): recipes or free-text lines placed on a day, meal and course.
+create table if not exists meal_plans (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references households (id) on delete cascade,
+  date date not null,
+  meal text not null,
+  course text not null default 'main',
+  recipe_id uuid references recipes (id) on delete set null,
+  title text,
+  servings numeric,
+  note text,
+  position integer not null default 0,
+  created_by uuid references users (id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists meal_plans_household_date_idx on meal_plans (household_id, date);
+drop trigger if exists meal_plans_touch on meal_plans;
+create trigger meal_plans_touch before update on meal_plans for each row execute function touch_updated_at();
+drop trigger if exists meal_plans_bump on meal_plans;
+create trigger meal_plans_bump after insert or update or delete on meal_plans for each row execute function bump_household_version();

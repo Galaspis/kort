@@ -24,9 +24,9 @@ export interface TabBarProps {
 
 const ICONS: Record<string, { on: Icon; off: Icon; label: string }> = {
   index: { on: "restaurant", off: "restaurant-outline", label: "מתכונים" },
+  plan: { on: "calendar", off: "calendar-outline", label: "תכנון" },
   shopping: { on: "cart", off: "cart-outline", label: "קניות" },
   learn: { on: "school", off: "school-outline", label: "לימוד" },
-  settings: { on: "settings", off: "settings-outline", label: "הגדרות" },
 };
 
 /** Four tabs with a permanent "+" in the middle that opens the add sheet. */

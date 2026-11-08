@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { CATEGORIES } from "@recipe/shared";
-import { Link } from "expo-router";
+import { Link, router } from "expo-router";
 import { useMemo, useState } from "react";
 import {
   FlatList,
@@ -128,6 +128,13 @@ export default function RecipesScreen() {
           <View style={{ gap: Spacing.md, marginBottom: Spacing.md }}>
             <Row style={{ justifyContent: "center", paddingVertical: 12 }}>
               <Wordmark width={176} />
+              <IconButton
+                icon="settings-outline"
+                color="textMuted"
+                accessibilityLabel="הגדרות"
+                onPress={() => router.push("/settings")}
+                style={{ position: "absolute", left: 0 }}
+              />
             </Row>
 
             <Row

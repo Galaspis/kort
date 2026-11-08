@@ -268,3 +268,4 @@ export function normalizeRecipeContent(ai: RecipeAIOutput): RecipeContent {
   };
 }
 export * from "./course";
+export * from "./plan";

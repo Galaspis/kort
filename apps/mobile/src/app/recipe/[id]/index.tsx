@@ -52,6 +52,7 @@ import {
   useSaveRecipe,
 } from "@/lib/queries";
 import { recipeToText, shareText, shareToWhatsApp } from "@/lib/share";
+import { PlanSheet } from "@/components/plan-sheet";
 import { useScreenOn } from "@/lib/screen-on";
 import { embedUrl, PLATFORM_LABEL } from "@/lib/video";
 
@@ -83,6 +84,7 @@ export default function RecipeScreen() {
   });
   const [tab, setTab] = useState<Tab>("ingredients");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   const [servings, setServings] = useState<number | null>(null);
   const [checked, setChecked] = useState<Set<number>>(new Set());
 
@@ -765,6 +767,8 @@ export default function RecipeScreen() {
         </View>
       </ScrollView>
 
+      <PlanSheet visible={planOpen} onClose={() => setPlanOpen(false)} recipe={recipe} />
+
       <Modal
         visible={menuOpen}
         transparent
@@ -805,6 +809,11 @@ export default function RecipeScreen() {
                   icon: "share-outline",
                   label: "שיתוף אחר",
                   run: () => shareText(recipeToText(recipe)),
+                },
+                {
+                  icon: "calendar-outline",
+                  label: "לתכנון: לאיזה יום?",
+                  run: () => setPlanOpen(true),
                 },
                 {
                   icon: "cart-outline",

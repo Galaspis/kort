@@ -1,4 +1,4 @@
-import type { ImportJobRow, Nutrition, RecipeContent, RecipeRow, ShoppingItemRow, ShoppingListRow, ShoppingListSummary, WhyNote } from "@recipe/shared";
+import type { ImportJobRow, MealPlanRow, Nutrition, RecipeContent, RecipeRow, ShoppingItemRow, ShoppingListRow, ShoppingListSummary, WhyNote } from "@recipe/shared";
 
 import { env } from "./env";
 
@@ -25,6 +25,21 @@ export class UnauthorizedError extends Error {
     super("לא מחובר");
     this.name = "UnauthorizedError";
   }
+}
+
+export interface NewPlanEntry {
+  date: string;
+  meal: string;
+  course: string;
+  recipe_id?: string | null;
+  title?: string | null;
+  servings?: number | null;
+  note?: string | null;
+}
+
+export interface PlanSuggestion {
+  picks: { recipe_id: string; reason: string }[];
+  new_idea: { title: string; description: string } | null;
 }
 
 export interface LessonProgress {
@@ -86,6 +101,15 @@ export const api = {
   nutrition: (recipeId: string) => request<Nutrition>(`/api/recipes/${recipeId}/nutrition`, { method: "POST" }),
   fetchVideo: (recipeId: string) => request<{ video_url: string }>(`/api/recipes/${recipeId}/video`, { method: "POST" }),
   findImage: (recipeId: string) => request<{ image_url: string | null }>(`/api/recipes/${recipeId}/image`, { method: "POST" }),
+  plan: (from: string, to: string) => request<MealPlanRow[]>(`/api/plan?from=${from}&to=${to}`),
+  addPlan: (entry: NewPlanEntry) => request<MealPlanRow>("/api/plan", { method: "POST", body: JSON.stringify(entry) }),
+  updatePlan: (id: string, patch: Partial<NewPlanEntry> & { position?: number }) =>
+    request<MealPlanRow>(`/api/plan/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  deletePlan: (id: string) => request<{ ok: true }>(`/api/plan/${id}`, { method: "DELETE" }),
+  copyPlanWeek: (from: string, to: string) =>
+    request<{ copied: number }>("/api/plan/copy", { method: "POST", body: JSON.stringify({ from, to }) }),
+  suggestPlan: (input: { date: string; meal: string; course: string; hint?: string | null }) =>
+    request<PlanSuggestion>("/api/plan/suggest", { method: "POST", body: JSON.stringify(input) }),
   learnProgress: () => request<LessonProgress[]>("/api/learn/progress"),
   completeLesson: (lesson_id: string, quiz_score: number | null) =>
     request<{ ok: true }>("/api/learn/progress", { method: "POST", body: JSON.stringify({ lesson_id, quiz_score }) }),
