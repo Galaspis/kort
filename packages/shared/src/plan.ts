@@ -90,6 +90,8 @@ export interface MealPlanRow {
   /** Shows on the entry and, as a reminder, on the day before ("להתחיל בצק"). */
   note: string | null;
   position: number;
+  /** Set by the "סיימנו" tick; the recipe's times_cooked moves with it. */
+  cooked_at: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -300,6 +300,24 @@ export function useDeletePlanEntry() {
   });
 }
 
+/** The "סיימנו" tick (optimistic); the recipe's cooked counter follows on the server. */
+export function useSetPlanCooked() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ entry, value }: { entry: MealPlanRow; value: boolean }) => api.setPlanCooked(entry.id, value),
+    onMutate: async ({ entry, value }) => {
+      await client.cancelQueries({ queryKey: keys.plan });
+      client.setQueriesData<MealPlanRow[]>({ queryKey: keys.plan }, (old) =>
+        old?.map((e) => (e.id === entry.id ? { ...e, cooked_at: value ? new Date().toISOString() : null } : e)),
+      );
+    },
+    onSettled: () => {
+      client.invalidateQueries({ queryKey: keys.plan });
+      client.invalidateQueries({ queryKey: keys.recipes });
+    },
+  });
+}
+
 export function useCopyPlanWeek() {
   const client = useQueryClient();
   return useMutation({

@@ -47,7 +47,17 @@ for (const user of subscribers) {
     : [];
   const related = recipes.filter((r) => lessonsForRecipe(r).some((l) => l.id === pick!.id)).slice(0, 4);
 
-  const mail = renderLessonEmail({ lesson: pick, total: LESSONS.length, appUrl, recipes: related });
+  // "היום בתפריט": what the planner has for today (Israel time), recipes linked.
+  const titleOf = new Map(recipes.map((r) => [r.id, r.title]));
+  const todayRows = user.household_id
+    ? await q<{ meal: string; course: string; title: string | null; recipe_id: string | null }>(
+        "select meal, course, title, recipe_id from meal_plans where household_id = $1 and date = (now() at time zone 'Asia/Jerusalem')::date order by position, created_at",
+        [user.household_id],
+      )
+    : [];
+  const today = todayRows.map((t) => ({ meal: t.meal, course: t.course, title: t.title ?? titleOf.get(t.recipe_id ?? "") ?? "מתכון", recipe_id: t.recipe_id }));
+
+  const mail = renderLessonEmail({ lesson: pick, total: LESSONS.length, appUrl, recipes: related, today });
   out.push({ to: user.email, lesson: pick.id, ...mail });
   if (!dry) {
     await q("insert into lesson_emails (user_id, lesson_id) values ($1, $2) on conflict (user_id, lesson_id) do update set sent_at = now()", [user.id, pick.id]);

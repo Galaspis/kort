@@ -479,6 +479,20 @@ app.delete("/api/plan/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+/** "סיימנו": marks a planned line as cooked (or not) and moves the recipe's times_cooked with it. */
+app.post("/api/plan/:id/cooked", async (c) => {
+  const caller = c.get("caller");
+  const body = z.object({ value: z.boolean() }).safeParse(await c.req.json().catch(() => null));
+  if (!body.success) return c.json({ error: "bad request" }, 400);
+  const row = await one<MealPlanRow>("select * from meal_plans where id = $1 and household_id = $2", [c.req.param("id"), caller.householdId]);
+  if (!row) return c.json({ error: "not found" }, 404);
+  if (Boolean(row.cooked_at) === body.data.value) return c.json(row);
+  const updated = await one<MealPlanRow>("update meal_plans set cooked_at = $1 where id = $2 returning *", [body.data.value ? new Date() : null, row.id]);
+  if (row.recipe_id)
+    await q("update recipes set times_cooked = greatest(0, times_cooked + $1) where id = $2", [body.data.value ? 1 : -1, row.recipe_id]);
+  return c.json(updated);
+});
+
 /** Copies every entry of one week (Sunday start) onto another week. */
 app.post("/api/plan/copy", async (c) => {
   const caller = c.get("caller");

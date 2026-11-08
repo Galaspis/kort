@@ -105,6 +105,8 @@ export const api = {
   addPlan: (entry: NewPlanEntry) => request<MealPlanRow>("/api/plan", { method: "POST", body: JSON.stringify(entry) }),
   updatePlan: (id: string, patch: Partial<NewPlanEntry> & { position?: number }) =>
     request<MealPlanRow>(`/api/plan/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  setPlanCooked: (id: string, value: boolean) =>
+    request<MealPlanRow>(`/api/plan/${id}/cooked`, { method: "POST", body: JSON.stringify({ value }) }),
   deletePlan: (id: string) => request<{ ok: true }>(`/api/plan/${id}`, { method: "DELETE" }),
   copyPlanWeek: (from: string, to: string) =>
     request<{ copied: number }>("/api/plan/copy", { method: "POST", body: JSON.stringify({ from, to }) }),

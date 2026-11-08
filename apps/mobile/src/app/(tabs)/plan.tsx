@@ -25,6 +25,7 @@ import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ActionSheet, type SheetAction } from "@/components/action-sheet";
+import { DayMealPicker, pickerDays } from "@/components/plan-sheet";
 import { AppText, Button, Card, Chip, IconButton, Loading, Row, Screen } from "@/components/ui";
 import { Fonts, Radius, Shadows, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
@@ -39,6 +40,7 @@ import {
   useDeletePlanEntry,
   usePlan,
   useRecipes,
+  useSetPlanCooked,
   useUpdatePlanEntry,
   type NewShoppingItem,
 } from "@/lib/queries";
@@ -64,12 +66,14 @@ export default function PlanScreen() {
   const remove = useDeletePlanEntry();
   const copyWeek = useCopyPlanWeek();
   const addShopping = useAddShoppingItems();
+  const cooked = useSetPlanCooked();
 
   const [slot, setSlot] = useState<Slot | null>(null); // the add sheet
   const [picker, setPicker] = useState<Slot | null>(null); // recipe picker
   const [suggest, setSuggest] = useState<Slot | null>(null); // "תציע לי"
   const [entryMenu, setEntryMenu] = useState<MealPlanRow | null>(null);
   const [courseMenu, setCourseMenu] = useState<MealPlanRow | null>(null);
+  const [moveEntry, setMoveEntry] = useState<MealPlanRow | null>(null);
   const [weekMenu, setWeekMenu] = useState(false);
 
   const recipeById = useMemo(() => new Map((recipes ?? []).map((r) => [r.id, r])), [recipes]);
@@ -126,6 +130,11 @@ export default function PlanScreen() {
     const actions: SheetAction[] = [];
     if (recipe)
       actions.push({ icon: "book-outline", label: "לפתוח את המתכון", run: () => router.push({ pathname: "/recipe/[id]", params: { id: recipe.id } }) });
+    actions.push(
+      e.cooked_at
+        ? { emoji: "↩️", label: "לבטל את הסימון \"סיימנו\"", run: () => cooked.mutate({ entry: e, value: false }) }
+        : { emoji: "✅", label: recipe ? "סיימנו (נספר כבישול של המתכון)" : "סיימנו", run: () => cooked.mutate({ entry: e, value: true }) },
+    );
     actions.push({ emoji: courseOf(e.course).emoji, label: `סוג מנה: ${courseOf(e.course).label} (לשנות)`, run: () => setCourseMenu(e) });
     if (recipe)
       actions.push({
@@ -145,19 +154,7 @@ export default function PlanScreen() {
         if (v !== null) update.mutate({ id: e.id, patch: { note: v.trim() || null } });
       },
     });
-    actions.push({
-      icon: "arrow-redo-outline",
-      label: "להזיז ליום אחר",
-      run: async () => {
-        const v = await dialog.prompt("לאיזה תאריך? (למשל 12.11)", shortDate(e.date));
-        const m = v?.trim().match(/^(\d{1,2})[./](\d{1,2})$/);
-        if (!m) return;
-        const d = new Date(e.date + "T12:00:00");
-        d.setMonth(parseInt(m[2]!, 10) - 1, parseInt(m[1]!, 10));
-        const key = toDateKey(d);
-        update.mutate({ id: e.id, patch: { date: key, meal: defaultMealFor(key) === "friday" && e.meal === "dinner" ? "friday" : e.meal } });
-      },
-    });
+    actions.push({ icon: "arrow-redo-outline", label: "להזיז ליום אחר", run: () => setMoveEntry(e) });
     actions.push({ icon: "trash-outline", label: "להסיר מהתכנון", color: theme.danger, run: () => remove.mutate(e.id) });
     return actions;
   }
@@ -264,7 +261,9 @@ export default function PlanScreen() {
                             </View>
                           )}
                           <View style={{ flex: 1 }}>
-                            <AppText numberOfLines={1}>{titleOf(e)}</AppText>
+                            <AppText numberOfLines={1} style={e.cooked_at ? { color: theme.textMuted, textDecorationLine: "line-through" } : undefined}>
+                              {titleOf(e)}
+                            </AppText>
                             <AppText variant="caption" color="textMuted" numberOfLines={1}>
                               {[
                                 courseOf(e.course).label,
@@ -276,6 +275,16 @@ export default function PlanScreen() {
                                 .join(" · ")}
                             </AppText>
                           </View>
+                          <Pressable onPress={() => cooked.mutate({ entry: e, value: !e.cooked_at })} hitSlop={8} accessibilityLabel="סיימנו">
+                            <View
+                              style={[
+                                styles.tick,
+                                { borderColor: e.cooked_at ? theme.accent : theme.beige, backgroundColor: e.cooked_at ? theme.accent : "transparent" },
+                              ]}
+                            >
+                              {e.cooked_at ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
+                            </View>
+                          </Pressable>
                           <Ionicons name="ellipsis-vertical" size={16} color={theme.textMuted} />
                         </Pressable>
                       );
@@ -374,6 +383,19 @@ export default function PlanScreen() {
         }
       />
 
+      {/* Move a line to another day */}
+      <ActionSheet visible={moveEntry !== null} onClose={() => setMoveEntry(null)} title={moveEntry ? titleOf(moveEntry) : undefined} subtitle="לאיזה יום ולאיזו ארוחה?">
+        {moveEntry ? (
+          <MoveBody
+            entry={moveEntry}
+            onDone={(date, meal) => {
+              update.mutate({ id: moveEntry.id, patch: { date, meal } });
+              setMoveEntry(null);
+            }}
+          />
+        ) : null}
+      </ActionSheet>
+
       {/* Week menu */}
       <ActionSheet
         visible={weekMenu}
@@ -418,6 +440,25 @@ export default function PlanScreen() {
         />
       ) : null}
     </Screen>
+  );
+}
+
+function MoveBody({ entry, onDone }: { entry: MealPlanRow; onDone: (date: string, meal: MealId) => void }) {
+  const [date, setDate] = useState(entry.date);
+  const [meal, setMeal] = useState<MealId>(entry.meal);
+  return (
+    <View style={{ gap: Spacing.sm, marginVertical: Spacing.sm }}>
+      <DayMealPicker
+        days={pickerDays(entry.date)}
+        date={date}
+        meal={meal}
+        onChange={(d, m) => {
+          setDate(d);
+          setMeal(m);
+        }}
+      />
+      <Button title="להזיז" icon="arrow-redo-outline" disabled={date === entry.date && meal === entry.meal} onPress={() => onDone(date, meal)} />
+    </View>
   );
 }
 
@@ -597,6 +638,7 @@ const styles = StyleSheet.create({
   addSmall: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
   entry: { flexDirection: "row", alignItems: "center", gap: 10, padding: 6, borderRadius: Radius.sm },
   thumb: { width: 40, height: 40, borderRadius: 10 },
+  tick: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: "center", justifyContent: "center" },
   thumbLg: { width: 56, height: 56, borderRadius: 12 },
   mealChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.pill, borderWidth: StyleSheet.hairlineWidth },
   modal: { flex: 1, maxWidth: 560, width: "100%", alignSelf: "center", gap: Spacing.sm },

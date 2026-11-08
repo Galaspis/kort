@@ -1,4 +1,4 @@
-import type { Lesson } from "@recipe/shared";
+import { COURSE_ORDER, MEALS, courseOf, mealOf, type CourseId, type Lesson } from "@recipe/shared";
 
 /**
  * The daily lesson as an email. Plain tables and inline styles so Gmail on the
@@ -11,6 +11,8 @@ export interface LessonEmailInput {
   appUrl: string;
   /** The family's recipes where this lesson shows up (already matched). */
   recipes: { id: string; title: string }[];
+  /** What the planner has for today; the email opens with it when there is something. */
+  today?: { meal: string; course: string; title: string; recipe_id: string | null }[];
 }
 
 const CREAM = "#F9F2E6";
@@ -25,7 +27,36 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export function renderLessonEmail({ lesson, total, appUrl, recipes }: LessonEmailInput): { subject: string; html: string; text: string } {
+export function renderLessonEmail({ lesson, total, appUrl, recipes, today = [] }: LessonEmailInput): { subject: string; html: string; text: string } {
+  const todayMeals = MEALS.filter((m) => today.some((t) => t.meal === m.id)).map((m) => ({
+    meal: m,
+    lines: today
+      .filter((t) => t.meal === m.id)
+      .sort((a, b) => (COURSE_ORDER[a.course as CourseId] ?? 9) - (COURSE_ORDER[b.course as CourseId] ?? 9)),
+  }));
+  const todayBlock = todayMeals.length
+    ? `
+  <tr><td style="padding:12px 24px 0 24px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${TERRACOTTA_SOFT};border-radius:16px;">
+      <tr><td style="padding:14px 18px;">
+        <div style="font-size:13px;color:${TERRACOTTA};font-weight:bold;">🍽️ היום בתפריט</div>
+        ${todayMeals
+          .map(
+            ({ meal, lines }) =>
+              `<div style="font-size:15px;line-height:24px;color:${INK};margin-top:4px;"><span style="font-weight:bold;">${meal.emoji} ${meal.label}:</span> ${lines
+                .map((l) =>
+                  l.recipe_id
+                    ? `<a href="${appUrl}/recipe/${l.recipe_id}" style="color:${TERRACOTTA};text-decoration:none;">${esc(l.title)}</a>`
+                    : esc(l.title),
+                )
+                .join(" · ")}</div>`,
+          )
+          .join("")}
+        <div style="margin-top:8px;"><a href="${appUrl}/plan" style="color:${TERRACOTTA};font-size:13px;text-decoration:none;">לתכנון השבוע ←</a></div>
+      </td></tr>
+    </table>
+  </td></tr>`
+    : "";
   const lessonUrl = `${appUrl}/learn/${lesson.id}`;
   const subject = `${lesson.emoji} שיעור ${lesson.number}: ${lesson.title}`;
 
@@ -65,7 +96,7 @@ export function renderLessonEmail({ lesson, total, appUrl, recipes }: LessonEmai
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:20px;overflow:hidden;font-family:Heebo,Arial,Helvetica,sans-serif;direction:rtl;text-align:right;">
   <tr><td align="center" style="padding:24px 24px 8px 24px;">
     <img src="${appUrl}/logo.png" width="160" alt="KORT" style="display:block;width:160px;height:auto;">
-  </td></tr>
+  </td></tr>${todayBlock}
   <tr><td align="center" style="padding:4px 24px 0 24px;">
     <div style="font-size:13px;color:${MUTED};">השיעור היומי · ${lesson.number} מתוך ${total}</div>
   </td></tr>
@@ -106,6 +137,9 @@ export function renderLessonEmail({ lesson, total, appUrl, recipes }: LessonEmai
 </body></html>`;
 
   const text = [
+    ...(todayMeals.length
+      ? ["היום בתפריט:", ...todayMeals.map(({ meal, lines }) => `${meal.label}: ${lines.map((l) => `${courseOf(l.course).label} - ${l.title}`).join(", ")}`), ""]
+      : []),
     `${lesson.emoji} שיעור ${lesson.number} מתוך ${total}: ${lesson.title}`,
     lesson.subtitle,
     "",

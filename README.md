@@ -169,6 +169,9 @@ Model in packages/shared/src/plan.ts, screen apps/mobile/src/app/(tabs)/plan.tsx
 - "המצרכים של השבוע לרשימת הקניות": ingredients of every planned recipe, scaled to the planned
   servings, merged into the current shopping list. Also "3 הימים הקרובים".
 - A note on an entry ("להתחיל בצק בלילה") also shows on the day before.
+- "סיימנו" tick on a line (`meal_plans.cooked_at`, `POST /api/plan/:id/cooked`): the recipe's
+  times_cooked moves with it. Moving a line opens a day/meal picker (components/plan-sheet.tsx).
+- The morning lesson email opens with "היום בתפריט" when the planner has something for today.
 - From a recipe page: "⋯ → לתכנון" picks a day and meal. Copy last week; clear the week.
 - Settings moved out of the bottom menu to a gear on the home screen so the four tabs stay
   symmetric: מתכונים, תכנון | + | קניות, לימוד.
