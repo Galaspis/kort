@@ -9,6 +9,7 @@ import { z } from "zod";
 import {
   classifyGrocery,
   extractFirstUrl,
+  refineCategory,
   type ImportJobRow,
   type RecipeRow,
   type ShoppingItemRow,
@@ -719,9 +720,30 @@ async function failAbandonedJobs() {
   if (rows.length) console.log(`[jobs] marked ${rows.length} abandoned import(s) as failed`);
 }
 
+/**
+ * Finer main-course categories (2026-11-13): recipes filed under the generic
+ * "מנה עיקרית"/"אחר" move to עוף / בשר / דגים / פסטה when the title or the
+ * ingredients make it obvious. Runs on every boot; once a recipe has moved it
+ * is no longer a candidate, so this is a no-op after the first time.
+ */
+async function backfillCategories() {
+  const rows = await q<{ id: string; title: string; category: string; ingredients: { name: string }[] }>(
+    "select id, title, category, ingredients from recipes where category in ('מנה עיקרית', 'אחר')",
+  );
+  let moved = 0;
+  for (const r of rows) {
+    const next = refineCategory(r);
+    if (next === r.category) continue;
+    await q("update recipes set category = $1 where id = $2", [next, r.id]);
+    moved += 1;
+  }
+  if (moved) console.log(`[categories] moved ${moved} recipe(s) to a finer category`);
+}
+
 await migrate();
 await failAbandonedJobs().catch((err) => console.warn("[jobs] cleanup failed:", (err as Error).message));
 void backfillShoppingMeta().catch((err) => console.warn("[grocery] backfill failed:", (err as Error).message));
+void backfillCategories().catch((err) => console.warn("[categories] backfill failed:", (err as Error).message));
 
 serve({ fetch: app.fetch, port: env.port }, (info) => {
   console.log(`recipe server listening on http://localhost:${info.port} (model: ${env.claudeModel}, hub auth: ${env.hubAuth})`);

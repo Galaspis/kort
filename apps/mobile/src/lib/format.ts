@@ -1,27 +1,15 @@
-import { guessAisle, parseShoppingLine, type Ingredient } from "@recipe/shared";
+import { formatQuantity, guessAisle, parseShoppingLine, scaleIngredientSmart, type Ingredient } from "@recipe/shared";
 
-const FRACTIONS: [number, string][] = [
-  [0.25, "¼"],
-  [0.333, "⅓"],
-  [0.5, "½"],
-  [0.666, "⅔"],
-  [0.75, "¾"],
-];
+export { formatQuantity, scaleText } from "@recipe/shared";
 
-/** 1.5 -> "1½", 0.333 -> "⅓", 2 -> "2", 2.37 -> "2.4" */
-export function formatQuantity(value: number | null): string {
-  if (value === null || Number.isNaN(value)) return "";
-  const whole = Math.floor(value);
-  const frac = value - whole;
-  if (frac < 0.05) return String(whole);
-  const match = FRACTIONS.find(([f]) => Math.abs(f - frac) < 0.06);
-  if (match) return whole > 0 ? `${whole}${match[1]}` : match[1];
-  return (Math.round(value * 10) / 10).toString();
-}
-
+/**
+ * Multiplies an ingredient for another number of servings and rounds it to an
+ * amount you can measure (see packages/shared/src/scale.ts): 3 כפיות → 1 כף,
+ * 1500 גרם → 1½ ק"ג, 4.5 ביצים → 5 ביצים. A factor of 1 leaves it untouched.
+ */
 export function scaleIngredient(ing: Ingredient, factor: number): Ingredient {
   if (ing.quantity === null || factor === 1) return ing;
-  return { ...ing, quantity: ing.quantity * factor };
+  return scaleIngredientSmart(ing, factor);
 }
 
 export function ingredientLine(ing: Ingredient): string {

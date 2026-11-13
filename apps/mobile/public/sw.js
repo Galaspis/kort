@@ -1,5 +1,5 @@
 /* Kort service worker: keeps the app shell and recipe photos available offline. */
-const CACHE = "kort-v4"; // bumped 2026-10-20: new icon files under the same names
+const CACHE = "kort-v5"; // bumped 2026-11-13: never keep a login redirect as the app shell
 
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => {
@@ -10,6 +10,22 @@ self.addEventListener("activate", (event) => {
       .then(() => self.clients.claim()),
   );
 });
+
+/**
+ * Only our own, directly served responses are worth keeping. When the login
+ * cookie is missing or expired, the gallab login redirects the request to
+ * auth.gallab.top; that page is "ok" too, and caching it as "/" would make the
+ * home-screen app open on a login page it cannot complete (and browsers refuse
+ * to serve a redirected response for a navigation at all).
+ */
+function cacheable(res, url) {
+  if (!res.ok || res.redirected) return false;
+  try {
+    return new URL(res.url || url).origin === self.location.origin;
+  } catch {
+    return false;
+  }
+}
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
@@ -30,7 +46,7 @@ self.addEventListener("fetch", (event) => {
         if (hit) return hit;
         try {
           const res = await fetch(req);
-          if (res.ok || res.type === "opaque") cache.put(req, res.clone());
+          if ((res.ok && !res.redirected) || res.type === "opaque") cache.put(req, res.clone());
           return res;
         } catch {
           return hit ?? Response.error();
@@ -47,7 +63,7 @@ self.addEventListener("fetch", (event) => {
         const cache = await caches.open(CACHE);
         try {
           const res = await fetch(req);
-          if (res.ok) cache.put(req, res.clone());
+          if (cacheable(res, req.url)) cache.put(req, res.clone());
           return res;
         } catch {
           const hit = await cache.match(req);

@@ -175,3 +175,27 @@ Model in packages/shared/src/plan.ts, screen apps/mobile/src/app/(tabs)/plan.tsx
 - From a recipe page: "⋯ → לתכנון" picks a day and meal. Copy last week; clear the week.
 - Settings moved out of the bottom menu to a gear on the home screen so the four tabs stay
   symmetric: מתכונים, תכנון | + | קניות, לימוד.
+
+## Servings calculator, categories, ingredients while cooking (2026-11-13)
+
+- **מחשבון מנות** sits in the recipe header (visible from every tab): − / + and a sheet with
+  חצי / המקור / ×1.5 / ×2 / ×3 / ×4 or a free number. A recipe with no servings asks for the
+  original number once and saves it. Scaling is in `packages/shared/src/scale.ts`: amounts are
+  rounded to measurable ones (¼ cup, 1½ tsp, 350 g, whole eggs) and units switch when the
+  result reads better (3 כפיות → 1 כף, 1500 גרם → 1½ ק"ג). Amounts written inside step text
+  ("מוסיפים 2 כפות שמן ו-3 ביצים") are rewritten too; temperatures and times are never touched
+  because only a number followed by a unit or a countable food is scaled. The planner's
+  "ingredients of the week" uses the same scaler.
+- **Categories**: main courses are filed by main ingredient — עוף, בשר, דגים, פסטה — and
+  "מנה עיקרית" is for the rest (vegetarian, legumes, shakshuka). The home screen shows a chip
+  row with counts; the filter sheet still has categories and tags. On boot the server moves
+  recipes still under "מנה עיקרית"/"אחר" to a finer category when the title or ingredients make
+  it obvious (`refineCategory` in packages/shared/src/index.ts; one-time, idempotent).
+- **Ingredients while cooking**: in the recipe's "הכנה" tab and in cooking mode, each step shows
+  the ingredients it mentions with their scaled amounts (`ingredientsForStep`: whole-word
+  Hebrew match allowing ה/ב/ל/ו/מ/ש prefixes and plural/singular endings; a step with no
+  match falls back to its group, e.g. "הרוטב"). The full list folds open on the same screen.
+- Floating up/down buttons (`components/scroll-jumper.tsx`) appear on the recipe page once it
+  is long enough to need them.
+- The service worker (`apps/mobile/public/sw.js`, cache `kort-v5`) no longer stores redirected
+  responses: with no login cookie the gallab login page would have been cached as the app shell.

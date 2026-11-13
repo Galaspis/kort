@@ -81,14 +81,19 @@ export default function RecipesScreen() {
   const featured = recipes[0];
   const rest = recipes.slice(1);
 
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of data ?? []) if (r.category) counts.set(r.category, (counts.get(r.category) ?? 0) + 1);
+    return counts;
+  }, [data]);
   const usedCategories = useMemo(() => {
-    const used = new Set((data ?? []).map((r) => r.category).filter(Boolean));
+    const used = new Set(categoryCounts.keys());
     const builtIn = CATEGORIES.filter((c) => used.has(c));
     const custom = [...used]
       .filter((c) => !(CATEGORIES as readonly string[]).includes(c))
       .sort((a, b) => a.localeCompare(b, "he"));
     return [...builtIn, ...custom];
-  }, [data]);
+  }, [categoryCounts]);
   const usedTags = useMemo(() => {
     const counts = new Map<string, number>();
     for (const r of data ?? [])
@@ -180,6 +185,29 @@ export default function RecipesScreen() {
                 />
               </Pressable>
             </Row>
+
+            {usedCategories.length > 1 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: Spacing.sm, paddingVertical: 2 }}
+              >
+                <Chip
+                  label={`הכול · ${data?.length ?? 0}`}
+                  selected={filter === "all"}
+                  onPress={() => setFilter("all")}
+                />
+                {usedCategories.map((c) => (
+                  <Chip
+                    key={c}
+                    label={`${c} · ${categoryCounts.get(c) ?? 0}`}
+                    emoji={CATEGORY_EMOJI[c]}
+                    selected={filter === `cat:${c}`}
+                    onPress={() => setFilter(filter === `cat:${c}` ? "all" : `cat:${c}`)}
+                  />
+                ))}
+              </ScrollView>
+            ) : null}
 
             {installer.canInstall && !installer.installed ? (
               <Pressable

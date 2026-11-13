@@ -8,6 +8,10 @@ import { AISLES, type Aisle } from "./aisles";
 
 export const CATEGORIES = [
   "ארוחת בוקר",
+  "עוף",
+  "בשר",
+  "דגים",
+  "פסטה",
   "מנה עיקרית",
   "תוספות",
   "סלטים",
@@ -23,6 +27,7 @@ export type Category = (typeof CATEGORIES)[number];
 
 export { AISLES, type Aisle } from "./aisles";
 export * from "./grocery";
+export * from "./scale";
 
 export const DIFFICULTIES = ["קל", "בינוני", "מאתגר"] as const;
 
@@ -77,7 +82,9 @@ export const RecipeContentSchema = z.object({
   cook_minutes: z.number().nullable().describe("זמן בישול/אפייה בדקות, null אם לא ידוע"),
   category: z
     .string()
-    .describe(`קטגוריה. בדרך כלל אחת מ: ${CATEGORIES.join(" | ")}. משפחות יכולות להוסיף קטגוריות משלהן`),
+    .describe(
+      `קטגוריה. בדרך כלל אחת מ: ${CATEGORIES.join(" | ")}. מנה עיקרית מעוף → 'עוף'; מבקר, טלה או בשר טחון → 'בשר'; מדגים ופירות ים → 'דגים'; פסטה, לזניה ואטריות → 'פסטה'; 'מנה עיקרית' רק לעיקריות אחרות (צמחוניות, קטניות, שקשוקה). משפחות יכולות להוסיף קטגוריות משלהן`,
+    ),
   cuisine: z.string().nullable().describe("מטבח: 'איטלקי', 'אסייתי', 'ישראלי'... או null"),
   difficulty: z.enum(DIFFICULTIES),
   tags: z
@@ -196,7 +203,11 @@ export function extractFirstUrl(text: string | null | undefined): string | null 
 // of "ירקות ופירות"); rejecting the whole recipe for that is a bad trade.
 // ---------------------------------------------------------------------------
 export const RecipeAISchema = RecipeContentSchema.extend({
-  category: z.string().describe(`אחת מהקטגוריות הבאות בדיוק: ${CATEGORIES.join(" | ")}`),
+  category: z
+    .string()
+    .describe(
+      `אחת מהקטגוריות הבאות בדיוק: ${CATEGORIES.join(" | ")}. עיקרית מעוף → 'עוף'; מבקר/טלה/בשר טחון → 'בשר'; דגים ופירות ים → 'דגים'; פסטה/לזניה/אטריות → 'פסטה'; 'מנה עיקרית' רק לעיקריות אחרות`,
+    ),
   difficulty: z.string().describe(`אחת מהאפשרויות בדיוק: ${DIFFICULTIES.join(" | ")}`),
   ingredients: z.array(
     IngredientSchema.extend({
@@ -238,7 +249,11 @@ const AISLE_KEYWORDS: [RegExp, Aisle][] = [
 
 const CATEGORY_KEYWORDS: [RegExp, Category][] = [
   [/בוקר|ברנץ/, "ארוחת בוקר"],
-  [/עיקרי|ערב|צהרי|בשר|עוף|דג|פסט|תבשיל/, "מנה עיקרית"],
+  [/עוף|הודו|פרגית|שניצל/, "עוף"],
+  [/בשר|בקר|טלה|כבש|קבב|סטייק|צלי/, "בשר"],
+  [/דג|סלמון|טונה|פירות ים/, "דגים"],
+  [/פסט|ספגטי|לזני|נודלס|אטריות|ניוקי|רביולי/, "פסטה"],
+  [/עיקרי|ערב|צהרי|תבשיל/, "מנה עיקרית"],
   [/תוספ|אורז|פירה|ירק/, "תוספות"],
   [/סלט/, "סלטים"],
   [/מרק/, "מרקים"],
@@ -255,10 +270,58 @@ const DIFFICULTY_KEYWORDS: [RegExp, (typeof DIFFICULTIES)[number]][] = [
   [/בינוני|medium/i, "בינוני"],
 ];
 
+// ---------------------------------------------------------------------------
+// Finer main-course categories (added 2026-11-13). Recipes saved before then
+// all sit in "מנה עיקרית"; this moves them to עוף / בשר / דגים / פסטה when the
+// title or the ingredients make it obvious, and leaves everything else alone.
+// ---------------------------------------------------------------------------
+const MAIN_SIGNALS: { category: Category; title: RegExp; ingredient: RegExp }[] = [
+  {
+    category: "פסטה",
+    title: /פסטה|ספגטי|לזניה|פטוצ'יני|פנה|נודלס|אטריות|ניוקי|רביולי|מקרוני|לינגוויני|טורטליני|רמן|פאד תאי|אורזו/,
+    ingredient: /^(פסטה|ספגטי|לזניה|פטוצ'יני|פנה|נודלס|אטריות|ניוקי|רביולי|מקרוני|לינגוויני|טורטליני|פוזילי|ריגטוני|טליאטלה|אורזו)(\s|$)/,
+  },
+  {
+    category: "דגים",
+    // Hebrew letters are not \w, so whole words are matched by hand ("דג" but not "דגנים").
+    title: /(^|[^֐-׿])דג(ים)?($|[^֐-׿])|סלמון|טונה|לברק|דניס|בורי|אמנון|מושט|שרימפס|קלמרי|פירות ים|בקלה|הרינג|מקרל|פורל|סרדינ/,
+    ingredient: /^(דג|דגים|פילה דג|סלמון|טונה|לברק|דניס|בורי|אמנון|מושט|שרימפס|קלמרי|בקלה|הרינג|מקרל|פורל|סרדינים|פילה)(\s|$)|(^|[^֐-׿])דג($|[^֐-׿])|סלמון|טונה/,
+  },
+  {
+    category: "עוף",
+    title: /עוף|פרגית|פרגיות|שניצל|הודו|כרעיים|שוקיים|כנפיים|חזה/,
+    ingredient: /עוף|פרגית|הודו|כרעיים|שוקיים|כנפיים|שניצל/,
+  },
+  {
+    category: "בשר",
+    title: /בשר|בקר|טלה|כבש|אנטריקוט|סטייק|צלי|אסאדו|קבב|קציצות|המבורגר|נקניק|צלעות|שייטל|אוסובוקו|כתף|פילה בקר|גולש|טחון/,
+    ingredient: /בשר|בקר|טלה|כבש|אנטריקוט|סטייק|אסאדו|נקניק|צלעות|שייטל|אוסובוקו|טחון|המבורגר|קבב/,
+  },
+];
+
+/**
+ * A better category for a recipe that is filed under the generic "מנה עיקרית"
+ * (or "אחר"). Title words win over ingredients; the first matching ingredient
+ * decides otherwise ("קציצות עוף" with ground chicken → עוף). Returns the
+ * current category when nothing is clear enough to change it.
+ */
+export function refineCategory(recipe: { title: string; category: string | null; ingredients: { name: string }[] }): string {
+  const current = recipe.category || "אחר";
+  if (current !== "מנה עיקרית" && current !== "אחר") return current;
+  const byTitle = MAIN_SIGNALS.find((s) => s.title.test(recipe.title));
+  if (byTitle) return byTitle.category;
+  for (const ing of recipe.ingredients) {
+    const hit = MAIN_SIGNALS.find((s) => s.ingredient.test(ing.name));
+    if (hit) return hit.category;
+  }
+  return current;
+}
+
 export function normalizeRecipeContent(ai: RecipeAIOutput): RecipeContent {
+  const category = pick(ai.category, CATEGORIES, "אחר", CATEGORY_KEYWORDS);
   return {
     ...ai,
-    category: pick(ai.category, CATEGORIES, "אחר", CATEGORY_KEYWORDS),
+    category: refineCategory({ title: ai.title, category, ingredients: ai.ingredients }),
     difficulty: pick(ai.difficulty, DIFFICULTIES, "בינוני", DIFFICULTY_KEYWORDS),
     tags: ai.tags.slice(0, 6),
     ingredients: ai.ingredients.map((ing) => ({

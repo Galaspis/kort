@@ -1,10 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
+import { ingredientsForStep } from "@recipe/shared";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -26,18 +26,23 @@ import {
 import { Fonts, Radius, Shadows, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import {
+  formatQuantity,
   formatSeconds,
   ingredientLine,
   parseDurationFromText,
   scaleIngredient,
+  scaleText,
 } from "@/lib/format";
+import { itemEmoji } from "@/lib/ingredients";
 import { goBack } from "@/lib/navigation";
 import { useHoldScreenOn } from "@/lib/screen-on";
 import { useMarkCooked, useRecipe } from "@/lib/queries";
 
 /**
  * Cooking mode: screen stays on, one step at a time in big type, a timer
- * for any step that has a duration, and the ingredient list one tap away.
+ * for any step that has a duration. The ingredients the step talks about
+ * sit right under it with their (scaled) amounts, and the whole list folds
+ * open below, so there is no jumping back to the recipe page mid-cooking.
  */
 export default function CookScreen() {
   useKeepAwake();
@@ -58,6 +63,14 @@ export default function CookScreen() {
     const target = servings ? Number(servings) : null;
     return recipe?.servings && target ? target / recipe.servings : 1;
   }, [recipe, servings]);
+  const scaled = useMemo(
+    () => (recipe?.ingredients ?? []).map((ing) => scaleIngredient(ing, factor)),
+    [recipe, factor],
+  );
+  const stepIngredients = useMemo(
+    () => (recipe?.steps ?? []).map((s) => ingredientsForStep(s, recipe?.ingredients ?? [])),
+    [recipe],
+  );
 
   if (!recipe) {
     return (
@@ -71,6 +84,8 @@ export default function CookScreen() {
   const step = steps[index]!;
   const duration = step.duration_seconds ?? parseDurationFromText(step.text);
   const isLast = index === steps.length - 1;
+  const mentioned = stepIngredients[index] ?? [];
+  const target = servings ? Number(servings) : recipe.servings;
 
   function finish() {
     markCooked.mutate(recipe!);
@@ -125,23 +140,84 @@ export default function CookScreen() {
           </Row>
         </View>
         <IconButton
-          icon="list"
+          icon={showIngredients ? "list-circle" : "list"}
+          color={showIngredients ? "primary" : "text"}
           circle
-          onPress={() => setShowIngredients(true)}
+          accessibilityLabel="כל המצרכים"
+          onPress={() => setShowIngredients((v) => !v)}
         />
       </Row>
 
       <ScrollView contentContainerStyle={styles.stepBody}>
-        <View
-          style={[styles.stepBadge, { backgroundColor: theme.primarySoft }]}
-        >
-          <Text style={[styles.stepBadgeText, { color: theme.primary }]}>
-            שלב {index + 1} מתוך {steps.length}
-            {step.group ? ` · ${step.group}` : ""}
-          </Text>
-        </View>
-        <AppText style={styles.stepText}>{step.text}</AppText>
+        <Row style={{ justifyContent: "space-between" }}>
+          <View
+            style={[styles.stepBadge, { backgroundColor: theme.primarySoft }]}
+          >
+            <Text style={[styles.stepBadgeText, { color: theme.primary }]}>
+              שלב {index + 1} מתוך {steps.length}
+              {step.group ? ` · ${step.group}` : ""}
+            </Text>
+          </View>
+          {target && factor !== 1 ? (
+            <AppText variant="caption" color="textMuted">
+              ל-{formatQuantity(target)} מנות
+            </AppText>
+          ) : null}
+        </Row>
+        <AppText style={styles.stepText}>{scaleText(step.text, factor)}</AppText>
+
+        {mentioned.length ? (
+          <View style={{ gap: Spacing.sm }}>
+            <AppText variant="caption" color="textMuted">
+              המצרכים לשלב הזה
+            </AppText>
+            {mentioned.map((i) => {
+              const ing = scaled[i]!;
+              const qty = [formatQuantity(ing.quantity), ing.unit].filter(Boolean).join(" ");
+              return (
+                <Row key={i} style={[styles.mentioned, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                  <Text style={{ fontSize: 22 }}>{itemEmoji(ing.name, ing.aisle)}</Text>
+                  <AppText style={{ flex: 1, fontSize: 18, lineHeight: 26 }}>
+                    {qty ? <AppText variant="bodyBold" style={{ fontSize: 18, lineHeight: 26 }}>{qty} </AppText> : null}
+                    {ing.name}
+                    {ing.note ? (
+                      <AppText color="textMuted" style={{ fontSize: 15 }}>
+                        {" "}({ing.note})
+                      </AppText>
+                    ) : null}
+                  </AppText>
+                </Row>
+              );
+            })}
+          </View>
+        ) : null}
+
         {duration ? <StepTimer key={index} seconds={duration} /> : null}
+
+        <Pressable onPress={() => setShowIngredients((v) => !v)} style={styles.foldHeader}>
+          <Text style={{ fontSize: 16 }}>🧺</Text>
+          <AppText variant="label" color="textSecondary" style={{ flex: 1 }}>
+            כל המצרכים ({recipe.ingredients.length})
+          </AppText>
+          <Ionicons name={showIngredients ? "chevron-up" : "chevron-down"} size={18} color={theme.textMuted} />
+        </Pressable>
+        {showIngredients ? (
+          <View style={{ gap: 6 }}>
+            {scaled.map((ing, i) => (
+              <Card key={i} flat style={[styles.allItem, mentioned.includes(i) && { borderColor: theme.primary }]}>
+                <Text style={{ fontSize: 16 }}>{itemEmoji(ing.name, ing.aisle)}</Text>
+                <AppText style={{ flex: 1 }}>
+                  {ing.group ? (
+                    <AppText variant="caption" color="primary">
+                      {ing.group} ·{" "}
+                    </AppText>
+                  ) : null}
+                  {ingredientLine(ing)}
+                </AppText>
+              </Card>
+            ))}
+          </View>
+        ) : null}
       </ScrollView>
 
       <Row style={[styles.nav, { paddingBottom: insets.bottom + Spacing.md }]}>
@@ -165,44 +241,6 @@ export default function CookScreen() {
           style={{ flex: 2 }}
         />
       </Row>
-
-      <Modal
-        visible={showIngredients}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setShowIngredients(false)}
-      >
-        <Screen
-          style={{
-            padding: Spacing.md,
-            gap: Spacing.md,
-            paddingTop: insets.top + Spacing.md,
-          }}
-        >
-          <Row style={{ justifyContent: "space-between" }}>
-            <AppText variant="heading">🧺 מצרכים</AppText>
-            <IconButton
-              icon="close"
-              circle
-              onPress={() => setShowIngredients(false)}
-            />
-          </Row>
-          <ScrollView
-            contentContainerStyle={{
-              gap: Spacing.sm,
-              paddingBottom: Spacing.xl,
-            }}
-          >
-            {recipe.ingredients.map((ing, i) => (
-              <Card key={i} flat style={{ padding: Spacing.sm + 4 }}>
-                <AppText>
-                  {ingredientLine(scaleIngredient(ing, factor))}
-                </AppText>
-              </Card>
-            ))}
-          </ScrollView>
-        </Screen>
-      </Modal>
     </Screen>
   );
 }
@@ -321,6 +359,25 @@ const styles = StyleSheet.create({
   },
   stepBadgeText: { fontFamily: Fonts.bold, fontSize: 13 },
   stepText: { fontSize: 30, lineHeight: 44, fontFamily: Fonts.medium },
+  mentioned: {
+    gap: Spacing.sm + 4,
+    padding: Spacing.sm + 4,
+    borderRadius: Radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  foldHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  allItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm + 2,
+    padding: Spacing.sm + 2,
+  },
   nav: { gap: Spacing.sm, padding: Spacing.md },
   timer: { padding: Spacing.md, gap: Spacing.md },
   timerText: {

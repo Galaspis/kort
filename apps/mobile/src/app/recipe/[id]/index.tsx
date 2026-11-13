@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import { lessonById } from "@recipe/shared";
+import { ingredientsForStep, lessonById } from "@recipe/shared";
 import type { Ingredient } from "@recipe/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Linking,
   Modal,
@@ -40,8 +40,10 @@ import { useTheme } from "@/hooks/use-theme";
 import { goBack } from "@/lib/navigation";
 import { api } from "@/lib/api";
 import { dialog } from "@/lib/dialog";
-import { formatMinutes, formatQuantity, scaleIngredient } from "@/lib/format";
+import { formatMinutes, formatQuantity, scaleIngredient, scaleText } from "@/lib/format";
 import { itemEmoji } from "@/lib/ingredients";
+import { ScaledNote, ServingsControl } from "@/components/servings";
+import { ScrollJumper, useScrollJumper } from "@/components/scroll-jumper";
 import {
   ingredientsToShopping,
   keys,
@@ -87,23 +89,34 @@ export default function RecipeScreen() {
   const [planOpen, setPlanOpen] = useState(false);
   const [servings, setServings] = useState<number | null>(null);
   const [checked, setChecked] = useState<Set<number>>(new Set());
+  const [stepsListOpen, setStepsListOpen] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const jumper = useScrollJumper();
 
   const baseServings = recipe?.servings ?? null;
   const currentServings = servings ?? baseServings;
   const factor =
     baseServings && currentServings ? currentServings / baseServings : 1;
 
+  const scaled = useMemo(
+    () => (recipe?.ingredients ?? []).map((ing) => scaleIngredient(ing, factor)),
+    [recipe, factor],
+  );
+
   const groups = useMemo(() => {
     const map = new Map<string | null, { ing: Ingredient; index: number }[]>();
-    recipe?.ingredients.forEach((ing, index) => {
+    scaled.forEach((ing, index) => {
       const key = ing.group ?? null;
-      map.set(key, [
-        ...(map.get(key) ?? []),
-        { ing: scaleIngredient(ing, factor), index },
-      ]);
+      map.set(key, [...(map.get(key) ?? []), { ing, index }]);
     });
     return [...map.entries()];
-  }, [recipe, factor]);
+  }, [scaled]);
+
+  /** For every step, which ingredients it talks about (indexes into the recipe's list). */
+  const stepIngredients = useMemo(
+    () => (recipe?.steps ?? []).map((step) => ingredientsForStep(step, recipe?.ingredients ?? [])),
+    [recipe],
+  );
 
   if (isLoading || !recipe) {
     return (
@@ -131,8 +144,8 @@ export default function RecipeScreen() {
   }
 
   function addIngredientsToList() {
-    const selected = recipe!.ingredients
-      .map((ing, i) => ({ ing: scaleIngredient(ing, factor), i }))
+    const selected = scaled
+      .map((ing, i) => ({ ing, i }))
       .filter(({ i }) => checked.size === 0 || checked.has(i))
       .map(({ ing }) => ing);
     addToList.mutate(
@@ -178,7 +191,12 @@ export default function RecipeScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={{ paddingBottom: 130 }}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={{ paddingBottom: 130 }}
+        onScroll={jumper.onScroll}
+        scrollEventThrottle={100}
+      >
         <View style={[styles.hero, { backgroundColor: theme.elevated }]}>
           {image ? (
             <Image
@@ -270,6 +288,23 @@ export default function RecipeScreen() {
                 }
               />
             </Row>
+            <Row style={{ justifyContent: "space-between", gap: Spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <AppText variant="label">מחשבון מנות</AppText>
+                <AppText variant="caption" color="textMuted">
+                  {baseServings
+                    ? "הכמויות במצרכים ובשלבים מתעדכנות"
+                    : "קודם מספרים לכמה מנות המתכון יוצא"}
+                </AppText>
+              </View>
+              <ServingsControl
+                base={baseServings}
+                current={currentServings}
+                onChange={setServings}
+                onSetBase={(n) => patch({ servings: n })}
+              />
+            </Row>
+            <ScaledNote base={baseServings} current={currentServings} />
           </View>
 
           <Row style={[styles.tabs, { borderBottomColor: theme.border }]}>
@@ -310,33 +345,9 @@ export default function RecipeScreen() {
               <View style={{ gap: Spacing.sm }}>
                 <Row style={{ justifyContent: "space-between" }}>
                   <AppText variant="heading">מצרכים</AppText>
-                  {baseServings ? (
-                    <Row
-                      style={[
-                        styles.servings,
-                        {
-                          borderColor: theme.border,
-                          backgroundColor: theme.card,
-                        },
-                      ]}
-                    >
-                      <IconButton
-                        icon="remove"
-                        size={18}
-                        onPress={() =>
-                          setServings(Math.max(1, (currentServings ?? 1) - 1))
-                        }
-                      />
-                      <AppText variant="label">
-                        {formatQuantity(currentServings)} מנות
-                      </AppText>
-                      <IconButton
-                        icon="add"
-                        size={18}
-                        onPress={() => setServings((currentServings ?? 1) + 1)}
-                      />
-                    </Row>
-                  ) : null}
+                  <AppText variant="caption" color="textMuted">
+                    {currentServings ? `ל-${formatQuantity(currentServings)} מנות` : `${recipe.ingredients.length} פריטים`}
+                  </AppText>
                 </Row>
                 {groups.map(([group, items], gi) => (
                   <View key={group ?? gi}>
@@ -475,9 +486,55 @@ export default function RecipeScreen() {
 
             {tab === "steps" ? (
               <View style={{ gap: Spacing.sm }}>
-                <AppText variant="heading">אופן ההכנה</AppText>
+                <Row style={{ justifyContent: "space-between" }}>
+                  <AppText variant="heading">אופן ההכנה</AppText>
+                  {currentServings ? (
+                    <AppText variant="caption" color="textMuted">
+                      ל-{formatQuantity(currentServings)} מנות
+                    </AppText>
+                  ) : null}
+                </Row>
+
+                {/* The whole ingredient list, folded, so there is no need to switch tabs mid-cooking. */}
+                {recipe.ingredients.length ? (
+                  <Card flat style={{ overflow: "hidden" }}>
+                    <Pressable
+                      onPress={() => setStepsListOpen((o) => !o)}
+                      style={[styles.foldHeader, stepsListOpen && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }]}
+                    >
+                      <Text style={{ fontSize: 18 }}>🧺</Text>
+                      <AppText variant="label" style={{ flex: 1 }}>
+                        כל המצרכים ({recipe.ingredients.length})
+                      </AppText>
+                      <Ionicons name={stepsListOpen ? "chevron-up" : "chevron-down"} size={18} color={theme.textMuted} />
+                    </Pressable>
+                    {stepsListOpen ? (
+                      <View style={styles.foldBody}>
+                        {groups.map(([group, items], gi) => (
+                          <View key={group ?? gi} style={{ gap: 4 }}>
+                            {group ? (
+                              <AppText variant="caption" color="primary">
+                                {group}
+                              </AppText>
+                            ) : null}
+                            {items.map(({ ing, index }) => (
+                              <AppText key={index} variant="caption" color="textSecondary">
+                                {itemEmoji(ing.name, ing.aisle)}{" "}
+                                <AppText variant="caption">{[formatQuantity(ing.quantity), ing.unit].filter(Boolean).join(" ")}</AppText>{" "}
+                                {ing.name}
+                                {ing.note ? ` (${ing.note})` : ""}
+                              </AppText>
+                            ))}
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                  </Card>
+                ) : null}
+
                 {recipe.steps.map((step, i) => {
                   const last = i === recipe.steps.length - 1;
+                  const mentioned = stepIngredients[i] ?? [];
                   return (
                     <Row
                       key={i}
@@ -522,7 +579,24 @@ export default function RecipeScreen() {
                             {step.group}
                           </AppText>
                         ) : null}
-                        <AppText style={{ paddingTop: 4 }}>{step.text}</AppText>
+                        <AppText style={{ paddingTop: 4 }}>{scaleText(step.text, factor)}</AppText>
+                        {mentioned.length ? (
+                          <Row style={{ gap: 6, flexWrap: "wrap", marginTop: 2 }}>
+                            {mentioned.map((index) => {
+                              const ing = scaled[index]!;
+                              const qty = [formatQuantity(ing.quantity), ing.unit].filter(Boolean).join(" ");
+                              return (
+                                <View key={index} style={[styles.ingChip, { backgroundColor: theme.elevated }]}>
+                                  <Text style={{ fontSize: 13 }}>{itemEmoji(ing.name, ing.aisle)}</Text>
+                                  <AppText variant="caption" color="textSecondary">
+                                    {qty ? <AppText variant="caption">{qty} </AppText> : null}
+                                    {ing.name}
+                                  </AppText>
+                                </View>
+                              );
+                            })}
+                          </Row>
+                        ) : null}
                         {step.duration_seconds ? (
                           <Row style={{ gap: 4 }}>
                             <Ionicons
@@ -766,6 +840,8 @@ export default function RecipeScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <ScrollJumper state={jumper.state} target={scrollRef} bottom={insets.bottom + 92} />
 
       <PlanSheet visible={planOpen} onClose={() => setPlanOpen(false)} recipe={recipe} />
 
@@ -1052,11 +1128,20 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 3,
   },
   tabBody: { padding: Spacing.md, paddingTop: Spacing.lg },
-  servings: {
-    borderWidth: 1,
+  foldHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    padding: Spacing.sm + 4,
+  },
+  foldBody: { padding: Spacing.sm + 4, gap: Spacing.sm },
+  ingChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: Radius.pill,
-    paddingHorizontal: 4,
-    gap: 2,
   },
   ingredient: {
     flexDirection: "row",
