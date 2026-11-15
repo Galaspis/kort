@@ -20,6 +20,7 @@ const SYSTEM_PROMPT = `You are the recipe engine of a family cooking app. Users 
 Output rules:
 - Everything the user will read (title, description, ingredient names, units, notes, steps, tags, cuisine, warnings) is written in natural, fluent Hebrew. Translate from any source language. Keep brand names and proper nouns recognizable (e.g. "פרמזן", "סריראצ'ה").
 - Prefer units a home cook in Israel uses: כוס, כף, כפית, גרם, ק"ג, מ"ל, ליטר, יחידה, חבילה, קופסה, שן (שום), פרוסה, צרור. Convert imperial units when the source uses them (1 cup ≈ 240 מ"ל, 1 oz ≈ 28 גרם, 1 lb ≈ 450 גרם, °F → °C rounded to a sensible oven setting).
+- servings is a whole number. When the source does not say, estimate it from the amounts (500 g pasta ≈ 4, a whole chicken ≈ 4-6, a cake ≈ 8-12, a salad of two cucumbers ≈ 2-4); null only when there are no amounts at all.
 - Quantities are numbers: write 0.5 not "חצי", 1.5 not "אחד וחצי". A range ("2-3 כפות") becomes the lower bound with the range in note. "לפי הטעם" / "קמצוץ" → quantity null, unit null, note holds the phrase.
 - Steps are short imperative sentences, one action each, in cooking order. Merge duplicate instructions that appear in both caption and speech. Put oven temperatures and times inside the step text and also fill duration_seconds for any waiting, baking, simmering, resting or chilling time.
 - Reconcile sources carefully: on-screen text and speech usually carry the exact amounts; captions sometimes omit them. If sources conflict, prefer the most specific one and mention the conflict in warnings.

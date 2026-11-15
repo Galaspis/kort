@@ -203,3 +203,10 @@ Model in packages/shared/src/plan.ts, screen apps/mobile/src/app/(tabs)/plan.tsx
   recipe, shopping list, planner, course and lesson pages) once there is somewhere to jump to.
 - The service worker (`apps/mobile/public/sw.js`, cache `kort-v5`) no longer stores redirected
   responses: with no login cookie the gallab login page would have been cached as the app shell.
+- Servings are never left empty: the importer estimates them from the amounts, and on boot
+  `apps/server/src/servings.ts` fills recipes that still have none (one Haiku call per 20).
+- Boot guard: the server injects a small script into the page (`BOOT_GUARD_HEAD` in
+  apps/server/src/index.ts; the `+html.tsx` template is not used by the single-page export).
+  If nothing has rendered after 7 seconds it shows "קורט לא עלה" with a button that clears
+  the caches and reloads, plus a line saying home-screen/browser, online, path and any JS error.
+  The app also no longer waits more than 2.5 s for the Heebo fonts before rendering.

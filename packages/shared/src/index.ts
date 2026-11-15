@@ -77,7 +77,10 @@ export const RecipeContentSchema = z.object({
     .string()
     .nullable()
     .describe("משפט או שניים שמתארים את המנה. null אם אין מידע"),
-  servings: z.number().nullable().describe("מספר מנות. null אם לא ידוע"),
+  servings: z
+    .number()
+    .nullable()
+    .describe("מספר מנות (מספר שלם). אם המקור לא אומר, הערך לפי הכמויות: 500 גרם פסטה ≈ 4, עוף שלם ≈ 4-6, עוגה ≈ 8-12. אל תחזיר null אלא אם אין כמויות בכלל"),
   prep_minutes: z.number().nullable().describe("זמן הכנה בדקות, null אם לא ידוע"),
   cook_minutes: z.number().nullable().describe("זמן בישול/אפייה בדקות, null אם לא ידוע"),
   category: z

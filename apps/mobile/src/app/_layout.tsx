@@ -14,7 +14,7 @@ import { Stack, router } from "expo-router";
 import { ShareIntentProvider, useShareIntentContext } from "expo-share-intent";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Platform, useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
@@ -106,10 +106,18 @@ function Navigation() {
     Heebo_800ExtraBold,
   });
   useRealtimeSync(Boolean(session));
+  // Fonts normally arrive within a second; if they do not (a flaky phone connection),
+  // the app renders with the system font rather than staying blank.
+  const [fontTimeout, setFontTimeout] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setFontTimeout(true), 2500);
+    return () => clearTimeout(t);
+  }, []);
+  const ready = fontsLoaded || fontTimeout;
 
   useEffect(() => {
-    if (!loading && fontsLoaded) SplashScreen.hideAsync();
-  }, [loading, fontsLoaded]);
+    if (!loading && ready) SplashScreen.hideAsync();
+  }, [loading, ready]);
 
   useEffect(() => {
     if (coldStartHome && !loading && session) {
@@ -128,7 +136,15 @@ function Navigation() {
       router.push({ pathname: "/import", params: { url, text } });
   }, [hasShareIntent, loading, session, shareIntent, resetShareIntent]);
 
-  if (loading || !fontsLoaded) return null;
+  // First real screen: the boot guard in +html.tsx is no longer needed.
+  useEffect(() => {
+    if (loading || !ready || Platform.OS !== "web" || typeof document === "undefined") return;
+    const w = window as Window & { __kortBootTimer?: ReturnType<typeof setTimeout> };
+    if (w.__kortBootTimer) clearTimeout(w.__kortBootTimer);
+    document.getElementById("kort-boot")?.remove();
+  }, [loading, ready]);
+
+  if (loading || !ready) return null;
 
   return (
     <>

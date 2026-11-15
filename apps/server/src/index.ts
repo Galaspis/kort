@@ -28,6 +28,7 @@ import { findStockImage } from "./import/image.js";
 import { runImport } from "./import/pipeline.js";
 import { fetchAndStoreVideo } from "./import/video.js";
 import { enrichSawLink } from "./saw.js";
+import { backfillServings } from "./servings.js";
 import { mediaRoot, saveMedia } from "./storage.js";
 
 type Variables = { caller: Caller };
@@ -701,13 +702,35 @@ const PWA_HEAD = [
   '<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />',
 ].join("");
 
+/**
+ * Boot guard (2026-11-15). If the app has not drawn anything within a few seconds
+ * (a script that failed to load, a stale cached version, a JavaScript error), the
+ * page says so in Hebrew with a button that clears the caches and reloads, instead
+ * of staying blank. The app removes the element as soon as its first screen renders.
+ */
+const BOOT_GUARD_HEAD = `<style>
+#kort-boot{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;text-align:center;font-family:system-ui,sans-serif;color:#2B2B2B;background:#F9F2E6;z-index:9999;direction:rtl}
+#kort-boot.show{display:flex}
+#kort-boot button{font:inherit;font-size:17px;padding:12px 22px;border:0;border-radius:999px;background:#C7522F;color:#fff}
+#kort-boot small{color:#6F6359;font-size:12px;word-break:break-all}
+@media (prefers-color-scheme: dark){#kort-boot{background:#171311;color:#F6EFE6}}
+</style>
+<script>(function(){var errors=[];window.addEventListener('error',function(e){errors.push(String(e.message||e))});window.addEventListener('unhandledrejection',function(e){errors.push(String((e.reason&&e.reason.message)||e.reason))});
+function painted(){var r=document.getElementById('root');return !!(r&&r.children.length)}
+function show(){if(painted())return;var el=document.getElementById('kort-boot');if(!el)return;var sa=(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone===true;document.getElementById('kort-boot-info').textContent=(sa?'אפליקציה ממסך הבית':'דפדפן')+' · '+(navigator.onLine?'מחובר':'לא מחובר')+' · '+location.pathname+(errors.length?' · '+errors.slice(0,2).join(' | '):'');el.className='show'}
+window.__kortBootTimer=setTimeout(show,7000);
+window.__kortReload=function(){var done=function(){location.replace('/?r='+Date.now())};try{var p=[];if(navigator.serviceWorker)p.push(navigator.serviceWorker.getRegistrations().then(function(rs){return Promise.all(rs.map(function(r){return r.unregister()}))}));if(window.caches)p.push(caches.keys().then(function(ks){return Promise.all(ks.map(function(k){return caches.delete(k)}))}));Promise.all(p).then(done,done)}catch(e){done()}};
+})();</script>`;
+const BOOT_GUARD_BODY = `<div id="kort-boot"><div style="font-size:40px">🫧</div><div style="font-size:20px;font-weight:700">קורט לא עלה</div><div>משהו נתקע בטעינה. הכפתור מנקה את הזיכרון של האפליקציה וטוען מחדש.</div><button type="button" onclick="window.__kortReload()">לטעון מחדש</button><a href="https://auth.gallab.top/?redirect_uri=https%3A%2F%2Fkort.gallab.top%2F" style="color:#C7522F">או להתחבר מחדש</a><small id="kort-boot-info"></small></div>`;
+
 app.get("*", async (c) => {
   const html = await readFile(path.join(webDir, "app.html"), "utf8").catch(() => null);
   if (!html) return c.text("Web build not found. Run: npm run build:web", 404);
   const page = html
     .replace(/<html[^>]*>/, '<html lang="he" dir="rtl">')
     .replace(/<meta name="viewport"[^>]*>/, "")
-    .replace("<head>", `<head>${PWA_HEAD}`);
+    .replace("<head>", `<head>${PWA_HEAD}${BOOT_GUARD_HEAD}`)
+    .replace("</body>", `${BOOT_GUARD_BODY}</body>`);
   return c.html(page);
 });
 
@@ -744,6 +767,7 @@ await migrate();
 await failAbandonedJobs().catch((err) => console.warn("[jobs] cleanup failed:", (err as Error).message));
 void backfillShoppingMeta().catch((err) => console.warn("[grocery] backfill failed:", (err as Error).message));
 void backfillCategories().catch((err) => console.warn("[categories] backfill failed:", (err as Error).message));
+void backfillServings().catch((err) => console.warn("[servings] backfill failed:", (err as Error).message));
 
 serve({ fetch: app.fetch, port: env.port }, (info) => {
   console.log(`recipe server listening on http://localhost:${info.port} (model: ${env.claudeModel}, hub auth: ${env.hubAuth})`);
