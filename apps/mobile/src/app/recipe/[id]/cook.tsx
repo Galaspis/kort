@@ -36,7 +36,8 @@ import {
 import { itemEmoji } from "@/lib/ingredients";
 import { goBack } from "@/lib/navigation";
 import { useHoldScreenOn } from "@/lib/screen-on";
-import { useMarkCooked, useRecipe } from "@/lib/queries";
+import { useMarkCooked, useRecipe, useSaveRecipe } from "@/lib/queries";
+import { ServingsControl } from "@/components/servings";
 
 /**
  * Cooking mode: screen stays on, one step at a time in big type, a timer
@@ -55,14 +56,19 @@ export default function CookScreen() {
   }>();
   const { data: recipe } = useRecipe(id);
   const markCooked = useMarkCooked();
+  const save = useSaveRecipe();
   const [index, setIndex] = useState(0);
   const [showIngredients, setShowIngredients] = useState(false);
   const [done, setDone] = useState(false);
+  // Starts from the number chosen on the recipe page; the pill up top can change it mid-cooking.
+  const [chosen, setChosen] = useState<number | null>(() => {
+    const n = servings ? Number(servings) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
+  });
 
   const factor = useMemo(() => {
-    const target = servings ? Number(servings) : null;
-    return recipe?.servings && target ? target / recipe.servings : 1;
-  }, [recipe, servings]);
+    return recipe?.servings && chosen ? chosen / recipe.servings : 1;
+  }, [recipe, chosen]);
   const scaled = useMemo(
     () => (recipe?.ingredients ?? []).map((ing) => scaleIngredient(ing, factor)),
     [recipe, factor],
@@ -85,7 +91,7 @@ export default function CookScreen() {
   const duration = step.duration_seconds ?? parseDurationFromText(step.text);
   const isLast = index === steps.length - 1;
   const mentioned = stepIngredients[index] ?? [];
-  const target = servings ? Number(servings) : recipe.servings;
+  const target = chosen ?? recipe.servings;
 
   function finish() {
     markCooked.mutate(recipe!);
@@ -149,7 +155,7 @@ export default function CookScreen() {
       </Row>
 
       <ScrollView contentContainerStyle={styles.stepBody}>
-        <Row style={{ justifyContent: "space-between" }}>
+        <Row style={{ justifyContent: "space-between", gap: Spacing.sm }}>
           <View
             style={[styles.stepBadge, { backgroundColor: theme.primarySoft }]}
           >
@@ -158,11 +164,13 @@ export default function CookScreen() {
               {step.group ? ` · ${step.group}` : ""}
             </Text>
           </View>
-          {target && factor !== 1 ? (
-            <AppText variant="caption" color="textMuted">
-              ל-{formatQuantity(target)} מנות
-            </AppText>
-          ) : null}
+          <ServingsControl
+            compact
+            base={recipe.servings}
+            current={target}
+            onChange={setChosen}
+            onSetBase={(n) => save.mutate({ id: recipe.id, input: { servings: n } })}
+          />
         </Row>
         <AppText style={styles.stepText}>{scaleText(step.text, factor)}</AppText>
 

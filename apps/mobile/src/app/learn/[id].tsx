@@ -2,11 +2,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { LESSONS, lessonById, type RecipeRow } from "@recipe/shared";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText, Button, Card, EmptyState, IconButton, Row, Screen } from "@/components/ui";
+import { ScrollJumper, useScrollJumper } from "@/components/scroll-jumper";
 import { Fonts, Radius, Shadows, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { goBack } from "@/lib/navigation";
@@ -35,6 +36,8 @@ export default function LessonScreen() {
   const complete = useCompleteLesson();
 
   const [stage, setStage] = useState<Stage>("cards");
+  const scrollRef = useRef<ScrollView>(null);
+  const jumper = useScrollJumper();
   const [card, setCard] = useState(0);
   const [checked, setChecked] = useState<boolean[]>([]);
   const [question, setQuestion] = useState(0);
@@ -107,7 +110,7 @@ export default function LessonScreen() {
         <View style={{ width: 44 }} />
       </Row>
 
-      <ScrollView contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 40 }]}>
+      <ScrollView ref={scrollRef} onScroll={jumper.onScroll} scrollEventThrottle={100} contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 40 }]}>
         <Row style={{ gap: Spacing.sm }}>
           <Text style={{ fontSize: 30 }}>{lesson.emoji}</Text>
           <View style={{ flex: 1 }}>
@@ -301,6 +304,8 @@ export default function LessonScreen() {
           </View>
         ) : null}
       </ScrollView>
+
+      <ScrollJumper state={jumper.state} target={scrollRef} bottom={insets.bottom + Spacing.lg} />
     </Screen>
   );
 }

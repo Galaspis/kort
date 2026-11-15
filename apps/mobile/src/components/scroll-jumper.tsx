@@ -5,10 +5,12 @@ import { Pressable, StyleSheet, View, type NativeScrollEvent, type NativeSynthet
 import { Radius, Shadows, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 
+/** ScrollView, FlatList or SectionList: whichever methods it has are used. */
 type ScrollTarget = {
   scrollTo?: (opts: { y: number; animated?: boolean }) => void;
   scrollToEnd?: (opts?: { animated?: boolean }) => void;
   scrollToOffset?: (opts: { offset: number; animated?: boolean }) => void;
+  getScrollResponder?: () => { scrollTo?: (opts: { y: number; animated?: boolean }) => void; scrollToEnd?: (opts?: { animated?: boolean }) => void } | null | undefined;
 };
 
 /**
@@ -32,7 +34,7 @@ export function ScrollJumper({
   bottom = Spacing.lg,
 }: {
   state: { y: number; viewport: number; content: number };
-  target: React.RefObject<ScrollTarget | null>;
+  target: React.RefObject<any>;
   /** Distance from the bottom edge, to clear a footer button or the tab bar. */
   bottom?: number;
 }) {
@@ -46,12 +48,14 @@ export function ScrollJumper({
     const now = Date.now();
     if (now - last.current < 250) return;
     last.current = now;
-    const t = target.current;
+    const t = target.current as ScrollTarget | null;
     if (!t) return;
+    // SectionList exposes the underlying scroll view; ScrollView and FlatList scroll directly.
+    const inner: ScrollTarget = t.scrollTo || t.scrollToOffset ? t : (t.getScrollResponder?.() as ScrollTarget | null | undefined) ?? t;
     if (where === "top") {
-      if (t.scrollToOffset) t.scrollToOffset({ offset: 0, animated: true });
-      else t.scrollTo?.({ y: 0, animated: true });
-    } else t.scrollToEnd?.({ animated: true });
+      if (inner.scrollToOffset) inner.scrollToOffset({ offset: 0, animated: true });
+      else inner.scrollTo?.({ y: 0, animated: true });
+    } else inner.scrollToEnd?.({ animated: true });
   };
 
   return (

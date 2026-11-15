@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
-import { CATEGORIES } from "@recipe/shared";
+import { CATEGORIES, type RecipeRow } from "@recipe/shared";
 import { Link, router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   FlatList,
   Modal,
@@ -15,7 +15,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Wordmark } from "@/components/brand";
-import { FeaturedCard, RecipeCard } from "@/components/recipe-card";
+import { CategoryTile, FeaturedCard, RecipeCard } from "@/components/recipe-card";
+import { ScrollJumper, useScrollJumper } from "@/components/scroll-jumper";
 import {
   AppText,
   Button,
@@ -52,6 +53,8 @@ export default function RecipesScreen() {
   const [filter, setFilter] = useState<Filter>("all");
   const [filterOpen, setFilterOpen] = useState(false);
   const installer = useInstallPrompt();
+  const listRef = useRef<FlatList<RecipeRow>>(null);
+  const jumper = useScrollJumper();
 
   const recipes = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -94,6 +97,15 @@ export default function RecipesScreen() {
       .sort((a, b) => a.localeCompare(b, "he"));
     return [...builtIn, ...custom];
   }, [categoryCounts]);
+  /** One photo per category for its tile: the newest recipe in it that has one. */
+  const categoryImages = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of data ?? []) {
+      const img = r.image_url ?? r.thumbnail_url;
+      if (img && r.category && !map.has(r.category)) map.set(r.category, img);
+    }
+    return map;
+  }, [data]);
   const usedTags = useMemo(() => {
     const counts = new Map<string, number>();
     for (const r of data ?? [])
@@ -114,6 +126,9 @@ export default function RecipesScreen() {
   return (
     <Screen>
       <FlatList
+        ref={listRef}
+        onScroll={jumper.onScroll}
+        scrollEventThrottle={100}
         data={rest}
         keyExtractor={(r) => r.id}
         numColumns={2}
@@ -186,29 +201,6 @@ export default function RecipesScreen() {
               </Pressable>
             </Row>
 
-            {usedCategories.length > 1 ? (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: Spacing.sm, paddingVertical: 2 }}
-              >
-                <Chip
-                  label={`הכול · ${data?.length ?? 0}`}
-                  selected={filter === "all"}
-                  onPress={() => setFilter("all")}
-                />
-                {usedCategories.map((c) => (
-                  <Chip
-                    key={c}
-                    label={`${c} · ${categoryCounts.get(c) ?? 0}`}
-                    emoji={CATEGORY_EMOJI[c]}
-                    selected={filter === `cat:${c}`}
-                    onPress={() => setFilter(filter === `cat:${c}` ? "all" : `cat:${c}`)}
-                  />
-                ))}
-              </ScrollView>
-            ) : null}
-
             {installer.canInstall && !installer.installed ? (
               <Pressable
                 onPress={() => installer.install()}
@@ -259,6 +251,31 @@ export default function RecipesScreen() {
               />
             ) : null}
 
+            {/* Category tiles: one picture per category; a tap shows that category's recipes. */}
+            {filter === "all" && !search && usedCategories.length > 1 ? (
+              <View style={{ gap: Spacing.sm }}>
+                <AppText variant="heading">קטגוריות</AppText>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: Spacing.sm + 4, paddingVertical: 4, paddingHorizontal: 2 }}
+                >
+                  {usedCategories.map((c) => (
+                    <CategoryTile
+                      key={c}
+                      category={c}
+                      count={categoryCounts.get(c) ?? 0}
+                      image={categoryImages.get(c) ?? null}
+                      onPress={() => {
+                        setFilter(`cat:${c}`);
+                        listRef.current?.scrollToOffset({ offset: 0, animated: true });
+                      }}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            ) : null}
+
             {rest.length ? (
               <Row
                 style={{
@@ -266,7 +283,7 @@ export default function RecipesScreen() {
                   marginTop: Spacing.xs,
                 }}
               >
-                <AppText variant="heading">מתכונים נבחרים</AppText>
+                <AppText variant="heading">{activeLabel ? `עוד ${activeLabel}` : "מתכונים נבחרים"}</AppText>
                 <AppText variant="caption" color="textMuted">
                   {data?.length ?? 0} מתכונים
                 </AppText>
@@ -329,6 +346,8 @@ export default function RecipesScreen() {
           ) : null
         }
       />
+
+      <ScrollJumper state={jumper.state} target={listRef} bottom={insets.bottom + 96} />
 
       {/* Filter sheet */}
       <Modal

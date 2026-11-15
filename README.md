@@ -187,15 +187,19 @@ Model in packages/shared/src/plan.ts, screen apps/mobile/src/app/(tabs)/plan.tsx
   because only a number followed by a unit or a countable food is scaled. The planner's
   "ingredients of the week" uses the same scaler.
 - **Categories**: main courses are filed by main ingredient — עוף, בשר, דגים, פסטה — and
-  "מנה עיקרית" is for the rest (vegetarian, legumes, shakshuka). The home screen shows a chip
-  row with counts; the filter sheet still has categories and tags. On boot the server moves
+  "מנה עיקרית" is for the rest (vegetarian, legumes, shakshuka). The home screen has a
+  "קטגוריות" row of picture tiles (the newest photo in each category, with the count); a tap
+  shows that category's recipes. The filter sheet still has categories and tags. On boot the server moves
   recipes still under "מנה עיקרית"/"אחר" to a finer category when the title or ingredients make
   it obvious (`refineCategory` in packages/shared/src/index.ts; one-time, idempotent).
 - **Ingredients while cooking**: in the recipe's "הכנה" tab and in cooking mode, each step shows
   the ingredients it mentions with their scaled amounts (`ingredientsForStep`: whole-word
   Hebrew match allowing ה/ב/ל/ו/מ/ש prefixes and plural/singular endings; a step with no
   match falls back to its group, e.g. "הרוטב"). The full list folds open on the same screen.
-- Floating up/down buttons (`components/scroll-jumper.tsx`) appear on the recipe page once it
-  is long enough to need them.
+- The same servings pill (`components/servings.tsx`) is used everywhere a number of servings
+  can change: the recipe header, cooking mode, adding a recipe to the planner, and a planned
+  line's "מנות" action (as a sheet). The edit form's "מנות" field sets the recipe's own number.
+- Floating up/down buttons (`components/scroll-jumper.tsx`) appear on every long screen (home,
+  recipe, shopping list, planner, course and lesson pages) once there is somewhere to jump to.
 - The service worker (`apps/mobile/public/sw.js`, cache `kort-v5`) no longer stores redirected
   responses: with no login cookie the gallab login page would have been cached as the app shell.

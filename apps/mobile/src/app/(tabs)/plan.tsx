@@ -20,13 +20,15 @@ import {
   type RecipeRow,
 } from "@recipe/shared";
 import { router } from "expo-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ActionSheet, type SheetAction } from "@/components/action-sheet";
 import { DayMealPicker, pickerDays } from "@/components/plan-sheet";
 import { AppText, Button, Card, Chip, IconButton, Loading, Row, Screen } from "@/components/ui";
+import { ScrollJumper, useScrollJumper } from "@/components/scroll-jumper";
+import { ServingsSheet } from "@/components/servings";
 import { Fonts, Radius, Shadows, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { api, type PlanSuggestion } from "@/lib/api";
@@ -40,6 +42,7 @@ import {
   useDeletePlanEntry,
   usePlan,
   useRecipes,
+  useSaveRecipe,
   useSetPlanCooked,
   useUpdatePlanEntry,
   type NewShoppingItem,
@@ -67,6 +70,7 @@ export default function PlanScreen() {
   const copyWeek = useCopyPlanWeek();
   const addShopping = useAddShoppingItems();
   const cooked = useSetPlanCooked();
+  const saveRecipe = useSaveRecipe();
 
   const [slot, setSlot] = useState<Slot | null>(null); // the add sheet
   const [picker, setPicker] = useState<Slot | null>(null); // recipe picker
@@ -74,6 +78,9 @@ export default function PlanScreen() {
   const [entryMenu, setEntryMenu] = useState<MealPlanRow | null>(null);
   const [courseMenu, setCourseMenu] = useState<MealPlanRow | null>(null);
   const [moveEntry, setMoveEntry] = useState<MealPlanRow | null>(null);
+  const [servingsEntry, setServingsEntry] = useState<MealPlanRow | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const jumper = useScrollJumper();
   const [weekMenu, setWeekMenu] = useState(false);
 
   const recipeById = useMemo(() => new Map((recipes ?? []).map((r) => [r.id, r])), [recipes]);
@@ -140,11 +147,7 @@ export default function PlanScreen() {
       actions.push({
         icon: "people-outline",
         label: `מנות: ${e.servings ? formatQuantity(e.servings) : recipe.servings ? formatQuantity(recipe.servings) : "?"} (לשנות)`,
-        run: async () => {
-          const v = await dialog.prompt("כמה מנות?", String(e.servings ?? recipe.servings ?? ""));
-          const n = v ? parseFloat(v.replace(",", ".")) : NaN;
-          if (!Number.isNaN(n) && n > 0) update.mutate({ id: e.id, patch: { servings: n } });
-        },
+        run: () => setServingsEntry(e),
       });
     actions.push({
       icon: "create-outline",
@@ -164,7 +167,7 @@ export default function PlanScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + Spacing.md }]}>
+      <ScrollView ref={scrollRef} onScroll={jumper.onScroll} scrollEventThrottle={100} contentContainerStyle={[styles.container, { paddingTop: insets.top + Spacing.md }]}>
         <Row style={{ justifyContent: "space-between" }}>
           <View>
             <AppText variant="display">תכנון</AppText>
@@ -395,6 +398,24 @@ export default function PlanScreen() {
           />
         ) : null}
       </ActionSheet>
+
+      <ScrollJumper state={jumper.state} target={scrollRef} bottom={insets.bottom + 96} />
+
+      {/* Servings of one planned line: same calculator as on the recipe page */}
+      {servingsEntry ? (
+        <ServingsSheet
+          visible
+          title={titleOf(servingsEntry)}
+          base={recipeById.get(servingsEntry.recipe_id ?? "")?.servings ?? null}
+          current={servingsEntry.servings ?? recipeById.get(servingsEntry.recipe_id ?? "")?.servings ?? null}
+          onClose={() => setServingsEntry(null)}
+          onDone={(n) => update.mutate({ id: servingsEntry.id, patch: { servings: n ?? recipeById.get(servingsEntry.recipe_id ?? "")?.servings ?? null } })}
+          onSetBase={(n) => {
+            const r = recipeById.get(servingsEntry.recipe_id ?? "");
+            if (r) saveRecipe.mutate({ id: r.id, input: { servings: n } });
+          }}
+        />
+      ) : null}
 
       {/* Week menu */}
       <ActionSheet

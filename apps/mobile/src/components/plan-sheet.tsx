@@ -7,7 +7,8 @@ import { AppText, Button, Chip, Row } from "@/components/ui";
 import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { dialog } from "@/lib/dialog";
-import { useAddPlanEntry } from "@/lib/queries";
+import { useAddPlanEntry, useSaveRecipe } from "@/lib/queries";
+import { ServingsControl } from "@/components/servings";
 
 /** A row of days to tap and the meal chips under it. Used to add a recipe to the plan and to move a line. */
 export function DayMealPicker({
@@ -62,13 +63,15 @@ export function pickerDays(from: string): string[] {
  */
 export function PlanSheet({ visible, onClose, recipe }: { visible: boolean; onClose: () => void; recipe: RecipeRow }) {
   const add = useAddPlanEntry();
+  const saveRecipe = useSaveRecipe();
   const today = toDateKey(new Date());
   const [date, setDate] = useState(today);
   const [meal, setMeal] = useState<MealId>(defaultMealFor(today));
+  const [servings, setServings] = useState<number | null>(null);
 
   async function save() {
     try {
-      await add.mutateAsync({ date, meal, course: courseForCategory(recipe.category), recipe_id: recipe.id, servings: recipe.servings ?? null });
+      await add.mutateAsync({ date, meal, course: courseForCategory(recipe.category), recipe_id: recipe.id, servings: servings ?? recipe.servings ?? null });
       onClose();
       dialog.alert("נוסף לתכנון", `${recipe.title} · יום ${dayName(date)} ${shortDate(date)}`);
     } catch (err) {
@@ -89,6 +92,15 @@ export function PlanSheet({ visible, onClose, recipe }: { visible: boolean; onCl
             setDate(d);
           }}
         />
+        <Row style={{ justifyContent: "space-between", gap: Spacing.sm }}>
+          <AppText variant="label">כמה מנות?</AppText>
+          <ServingsControl
+            base={recipe.servings ?? null}
+            current={servings ?? recipe.servings ?? null}
+            onChange={setServings}
+            onSetBase={(n) => saveRecipe.mutate({ id: recipe.id, input: { servings: n } })}
+          />
+        </Row>
         <AppText variant="caption" color="textMuted">
           יסומן כ{courseOf(courseForCategory(recipe.category)).label}. אפשר לשנות אחר כך בלשונית תכנון.
         </AppText>

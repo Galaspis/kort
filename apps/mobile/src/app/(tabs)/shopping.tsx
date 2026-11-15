@@ -7,7 +7,7 @@ import {
   type ShoppingListSummary,
 } from "@recipe/shared";
 import * as Haptics from "expo-haptics";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Pressable,
   SectionList,
@@ -28,6 +28,7 @@ import {
   Row,
   Screen,
 } from "@/components/ui";
+import { ScrollJumper, useScrollJumper } from "@/components/scroll-jumper";
 import {
   AISLE_EMOJI,
   Fonts,
@@ -71,6 +72,8 @@ export default function ShoppingScreen() {
   const insets = useSafeAreaInsets();
   const lists = useShoppingLists();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const listRef = useRef<SectionList<ShoppingItemRow>>(null);
+  const jumper = useScrollJumper();
 
   // Lists come sorted oldest → newest: history, then the current list, then future ones.
   const sorted = useMemo(() => lists.data ?? [], [lists.data]);
@@ -266,6 +269,9 @@ export default function ShoppingScreen() {
   return (
     <Screen>
       <SectionList
+        ref={listRef}
+        onScroll={jumper.onScroll}
+        scrollEventThrottle={100}
         sections={sections}
         keyExtractor={(i) => i.id}
         contentContainerStyle={[
@@ -612,6 +618,8 @@ export default function ShoppingScreen() {
           ) : null
         }
       />
+
+      <ScrollJumper state={jumper.state} target={listRef} bottom={insets.bottom + 96} />
 
       {/* One item's menu */}
       <ActionSheet

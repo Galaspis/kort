@@ -1,12 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { FIXES, LESSONS, LEVELS, lessonById, type CourseLevel } from "@recipe/shared";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ActionSheet } from "@/components/action-sheet";
 import { AppText, Button, Card, Row, Screen } from "@/components/ui";
+import { ScrollJumper, useScrollJumper } from "@/components/scroll-jumper";
 import { Radius, Shadows, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { dialog } from "@/lib/dialog";
@@ -23,6 +24,8 @@ export default function LearnScreen() {
   const reset = useResetLearning();
   const [fixOpen, setFixOpen] = useState(false);
   const [fixId, setFixId] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const jumper = useScrollJumper();
 
   const done = new Map((data ?? []).map((p) => [p.lesson_id, p]));
   const next = LESSONS.find((l) => !done.has(l.id)) ?? null;
@@ -44,7 +47,7 @@ export default function LearnScreen() {
 
   return (
     <Screen>
-      <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + Spacing.md }]}>
+      <ScrollView ref={scrollRef} onScroll={jumper.onScroll} scrollEventThrottle={100} contentContainerStyle={[styles.container, { paddingTop: insets.top + Spacing.md }]}>
         <View>
           <AppText variant="display">ללמוד לבשל</AppText>
           <AppText variant="caption" color="textSecondary">
@@ -162,6 +165,8 @@ export default function LearnScreen() {
           <Button title="להתחיל מההתחלה" variant="ghost" size="sm" icon="refresh-outline" onPress={confirmReset} />
         ) : null}
       </ScrollView>
+
+      <ScrollJumper state={jumper.state} target={scrollRef} bottom={insets.bottom + 96} />
 
       {/* "Something is missing": pick a symptom, get the fix */}
       <ActionSheet

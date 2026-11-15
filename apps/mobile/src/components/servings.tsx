@@ -159,6 +159,64 @@ export function ServingsControl({
   );
 }
 
+/**
+ * The same calculator inside a bottom sheet, for places that have no header
+ * to put the pill in (a planner line). `onDone` gets the chosen servings
+ * (null = back to the recipe's own number).
+ */
+export function ServingsSheet({
+  visible,
+  title,
+  base,
+  current,
+  onClose,
+  onDone,
+  onSetBase,
+}: {
+  visible: boolean;
+  title?: string;
+  base: number | null;
+  current: number | null;
+  onClose: () => void;
+  onDone: (servings: number | null) => void;
+  onSetBase?: (servings: number) => void;
+}) {
+  const theme = useTheme();
+  const [value, setValue] = useState<number | null>(current);
+  // Fresh copy of the saved value every time the sheet opens.
+  const [seen, setSeen] = useState(visible);
+  if (visible !== seen) {
+    setSeen(visible);
+    if (visible) setValue(current);
+  }
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={[styles.backdrop, { backgroundColor: theme.overlay }]} onPress={onClose}>
+        <Pressable style={[styles.sheet, { backgroundColor: theme.card }]} onPress={(e) => e.stopPropagation()}>
+          <View style={[styles.grabber, { backgroundColor: theme.border }]} />
+          {title ? (
+            <AppText variant="subheading" numberOfLines={1} style={{ textAlign: "center" }}>
+              {title}
+            </AppText>
+          ) : null}
+          <Row style={{ justifyContent: "space-between", gap: Spacing.sm }}>
+            <AppText variant="label">כמה מנות?</AppText>
+            <ServingsControl base={base} current={value} onChange={setValue} onSetBase={onSetBase} />
+          </Row>
+          <Button
+            title="שמירה"
+            icon="checkmark"
+            onPress={() => {
+              onDone(value);
+              onClose();
+            }}
+          />
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
 /** One line under a scaled ingredient list that says what was done. */
 export function ScaledNote({ base, current }: { base: number | null; current: number | null }) {
   const theme = useTheme();

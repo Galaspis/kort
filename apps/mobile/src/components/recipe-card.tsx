@@ -93,6 +93,56 @@ export function RecipeCard({ recipe }: { recipe: RecipeRow }) {
   );
 }
 
+/**
+ * Home-screen tile for a category: the photo of one of its recipes with the
+ * category name and the count over it. Tapping shows that category's recipes.
+ */
+export function CategoryTile({
+  category,
+  count,
+  image,
+  onPress,
+}: {
+  category: string;
+  count: number;
+  image: string | null;
+  onPress: () => void;
+}) {
+  const theme = useTheme();
+  const emoji = CATEGORY_EMOJI[category] ?? "🍽️";
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityLabel={`${category}, ${count} מתכונים`}
+      style={({ pressed }) => [
+        styles.catTile,
+        Shadows.card,
+        { backgroundColor: theme.elevated, transform: [{ scale: pressed ? 0.98 : 1 }] },
+      ]}
+    >
+      {image ? (
+        <Image source={{ uri: image }} style={StyleSheet.absoluteFill} contentFit="cover" transition={250} />
+      ) : (
+        <View style={styles.placeholder}>
+          <Text style={{ fontSize: 44 }}>{emoji}</Text>
+        </View>
+      )}
+      <LinearGradient
+        colors={["transparent", "rgba(20,12,8,0.3)", "rgba(20,12,8,0.88)"]}
+        locations={[0.3, 0.6, 1]}
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <View style={styles.overlay} pointerEvents="none">
+        <AppText variant="bodyBold" numberOfLines={1} style={styles.title}>
+          {emoji} {category}
+        </AppText>
+        <Text style={styles.meta}>{count === 1 ? "מתכון אחד" : `${count} מתכונים`}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
 /** Large featured card for the top of the home screen. */
 export function FeaturedCard({
   recipe,
@@ -209,6 +259,12 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   imageWrap: { aspectRatio: 0.9, width: "100%" },
+  catTile: {
+    width: 150,
+    aspectRatio: 1.05,
+    borderRadius: Radius.md + 2,
+    overflow: "hidden",
+  },
   placeholder: {
     position: "absolute",
     top: 0,
