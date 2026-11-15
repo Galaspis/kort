@@ -1,6 +1,13 @@
 # Kort. Install as /etc/caddy/sites/kort.caddy, then: sudo systemctl reload caddy
-# Everything (pages, API, media) sits behind the shared Google login. The server trusts the
-# Remote-Email header that the login sets; client-sent Remote-* headers are stripped first.
+# Data (the API and the photos/videos) sits behind the shared Google login. The server trusts the
+# Remote-Email header that the login sets; client-sent Remote-* headers are stripped first, and the
+# server itself answers 401 to any API call without that header.
+#
+# The app shell (pages, scripts, manifest, icons) is public since 2026-11-13. It holds no data: a
+# visitor who is not signed in gets Kort's own sign-in screen, which sends them to the login and
+# comes back. Before that, the first request from the iPhone home-screen app (which has no cookie of
+# its own) was bounced to auth.gallab.top before any of the app loaded, and the app showed a blank
+# page. Phones also fetch the manifest and icons without the cookie when adding to the home screen.
 # The iPhone Shortcut opens kort.gallab.top/import?url=… in the browser, which carries the login cookie.
 kort.gallab.top {
     encode zstd gzip
@@ -17,15 +24,23 @@ kort.gallab.top {
         request_header -Remote-Name
         request_header -Remote-Groups
 
-        # Icons and the web manifest are public: phones fetch them WITHOUT the login cookie when
-        # adding the site to the home screen, and would otherwise show a letter instead of an icon.
-        @public path /manifest.json /logo.png /icon.png /icon-192.png /icon-512.png /icon-maskable-512.png /apple-touch-icon.png /favicon-16.png /favicon-32.png
-        handle @public {
+        # Everything with data: behind the login.
+        @private path /api/* /media/*
+        handle @private {
+            import auth
+            reverse_proxy 127.0.0.1:8787
+        }
+
+        # Icons and the manifest: public and cacheable.
+        @icons path /manifest.json /logo.png /icon.png /icon-192.png /icon-512.png /icon-maskable-512.png /apple-touch-icon.png /favicon-16.png /favicon-32.png /favicon.ico
+        handle @icons {
             header Cache-Control "public, max-age=86400"
             reverse_proxy 127.0.0.1:8787
         }
 
-        import auth
-        reverse_proxy 127.0.0.1:8787
+        # The app shell: public, no data in it.
+        handle {
+            reverse_proxy 127.0.0.1:8787
+        }
     }
 }

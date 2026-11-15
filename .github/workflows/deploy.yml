@@ -44,6 +44,7 @@ jobs:
         env: { H: "${{ secrets.VPS_HOST }}" }
         run: |
           ssh deploy@$H 'sleep 10; curl -s -m 10 http://127.0.0.1:8787/health; echo; curl -s -o /dev/null -m 10 -w "api without identity: %{http_code}\n" http://127.0.0.1:8787/api/me; curl -s -m 10 -H "Remote-Email: ci-probe@example.com" -o /dev/null -w "api with unknown identity: %{http_code}\n" http://127.0.0.1:8787/api/me'
-          code=$(curl -s -o /dev/null -m 15 -w "%{http_code}" https://kort.gallab.top/)
-          echo "kort.gallab.top → $code (401 = login gate, expected)"
-          test "$code" = "401"
+          page=$(curl -s -o /dev/null -m 15 -w "%{http_code}" https://kort.gallab.top/)
+          api=$(curl -s -o /dev/null -m 15 -w "%{http_code}" https://kort.gallab.top/api/me)
+          echo "kort.gallab.top → $page (200 = app shell, public), /api/me → $api (401 = login gate, expected)"
+          test "$page" = "200" && test "$api" = "401"
