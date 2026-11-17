@@ -183,3 +183,6 @@ create trigger meal_plans_touch before update on meal_plans for each row execute
 drop trigger if exists meal_plans_bump on meal_plans;
 create trigger meal_plans_bump after insert or update or delete on meal_plans for each row execute function bump_household_version();
 alter table meal_plans add column if not exists cooked_at timestamptz;
+
+-- Deep lessons (added 2026-11-17): how the practice dish of a lesson came out (1 not good, 2 good, 3 great).
+alter table learning_progress add column if not exists cook_rating smallint;

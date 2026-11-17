@@ -194,6 +194,11 @@ function Navigation() {
             options={{ title: "סרטון", presentation: "modal" }}
           />
           <Stack.Screen name="learn/[id]" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="learn/ask"
+            options={{ title: "שאלה לקורט", presentation: "modal" }}
+          />
+          <Stack.Screen name="chef" options={{ title: "לבשל עם קורט" }} />
           <Stack.Screen name="settings" options={{ title: "הגדרות" }} />
         </Stack.Protected>
         <Stack.Protected guard={!session}>

@@ -145,6 +145,37 @@ stay reachable through the home-screen filter); one lesson is apps/mobile/src/ap
   the science of that dish, tied to lesson ids, cached in `recipes.why` (apps/server/src/learn.ts).
 - A lesson's last page lists the family's own recipes where the principle shows up (keyword match).
 
+### Deep lessons and the cooking coach (2026-11-17)
+
+The first step from "short course" to a master course. One lesson (5, browning) is built in the
+deep format as a pilot; the other 23 keep the short one until the format is judged.
+
+- **Deep lesson**: a lesson with an entry in `packages/shared/src/course-deep.ts` replaces the
+  experiment with three stages: **לראות** (an interactive picture drawn in the app,
+  `components/learn/browning-sim.tsx`: drag the pan temperature, switch dry/wet, and see the crust,
+  the grey band, steam, smoke, time and sound; then short clips of what it should look like),
+  **לבשל** (a complete practice dish, not from the family's recipes, step by step with
+  "what do you see / hear?" stops, `components/learn/guided-cook.tsx`; the family's matching recipes
+  are offered next to it) and **תקלות** (the common failures, each drawn, with cause and fix). The
+  quiz gets harder questions, and the last page asks how the dish came out
+  (`learning_progress.cook_rating`, 1-3).
+- **Clips**: each clip has a title, what to look for, and an English prompt for a video model.
+  `video` is null until the clip exists, and the app then shows "הסרטון בהכנה" with the text. A
+  finished clip goes to `/srv/kort/media/course/<lesson>/<clip>.mp4` and its `video` is set to
+  `/media/course/<lesson>/<clip>.mp4`. No clip has been generated yet (it needs a paid video service).
+- **שאלה** (top of every lesson, `app/learn/ask.tsx` → `POST /api/learn/ask`): a question to the
+  coach. The model gets the lesson's full text, so the answer is in its context.
+- **לבשל עם קורט** (`app/chef.tsx`, from the "+" sheet and the Learn tab): no recipe to start from.
+  The model asks one thing at a time with tappable answers (what is in the house, how many eaters,
+  time, equipment, limits), proposes a dish or a meal with the reasons it is built right, and on
+  approval writes full recipes (`POST /api/chef/turn`, `POST /api/chef/build`: one call per dish in
+  parallel, then the working order of the meal). Saved dishes are normal recipes with their
+  "why it works" notes already filled and the tag "קורט". The conversation is not stored.
+- All three stand on one list of cooking foundations and the lesson index in
+  `apps/server/src/coach.ts`, and point back at lessons by id. They use `COACH_MODEL`
+  (default `claude-sonnet-5-5`, the stronger model, like Saw), not the Haiku that imports recipes:
+  roughly 1 cent a question and 5-10 cents a built meal.
+
 ## Screen stays on, and the lesson of the day by email
 
 - `apps/mobile/src/lib/screen-on.ts` keeps the screen on with the browser's Wake Lock and asks

@@ -240,7 +240,8 @@ export function useNextLesson() {
 export function useCompleteLesson() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ lessonId, score }: { lessonId: string; score: number | null }) => api.completeLesson(lessonId, score),
+    mutationFn: ({ lessonId, score, cookRating }: { lessonId: string; score: number | null; cookRating?: number | null }) =>
+      api.completeLesson(lessonId, score, cookRating ?? null),
     onSuccess: () => client.invalidateQueries({ queryKey: keys.learn }),
   });
 }

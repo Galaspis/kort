@@ -94,6 +94,20 @@ export default function LearnScreen() {
           <Ionicons name="chevron-back" size={18} color={theme.textMuted} />
         </Pressable>
 
+        {/* Build a dish with the coach, on the same foundations as the lessons */}
+        <Pressable onPress={() => router.push("/chef")} style={[styles.tool, Shadows.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={[styles.toolIcon, { backgroundColor: theme.warningSoft }]}>
+            <Text style={{ fontSize: 22 }}>👩‍🍳</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <AppText variant="label">לבשל עם קורט</AppText>
+            <AppText variant="caption" color="textSecondary">
+              בלי מתכון: אומרים מה יש ולכמה, ובונים יחד מנה או ארוחה
+            </AppText>
+          </View>
+          <Ionicons name="chevron-back" size={18} color={theme.textMuted} />
+        </Pressable>
+
         {/* Levels */}
         {LEVELS.map((level) => {
           const stat = levelDone(level.id);

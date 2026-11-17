@@ -9,6 +9,7 @@ import { z } from "zod";
 import {
   classifyGrocery,
   extractFirstUrl,
+  lessonById,
   refineCategory,
   type ImportJobRow,
   type RecipeRow,
@@ -21,6 +22,7 @@ import { resolveCaller, type Caller } from "./auth.js";
 import { migrate, one, q, setClause } from "./db.js";
 import { env } from "./env.js";
 import { backfillShoppingMeta, enrichShoppingItems } from "./grocery.js";
+import { askLesson, chefBuild, chefTurn } from "./coach.js";
 import { explainRecipe } from "./learn.js";
 import { COURSE_IDS, MEAL_IDS, suggestForSlot } from "./plan.js";
 import { enrichManualRecipe, estimateNutrition } from "./import/extract.js";
@@ -95,7 +97,7 @@ app.get("/api/version", async (c) => {
 const RECIPE_COLS = [
   "title","description","servings","prep_minutes","cook_minutes","category","cuisine","difficulty","tags","ingredients","steps",
   "original_language","confidence","warnings","source_url","source_platform","video_url","thumbnail_url","author","caption",
-  "image_url","notes","rating","times_cooked","is_favorite","nutrition","kids_approved",
+  "image_url","notes","rating","times_cooked","is_favorite","nutrition","kids_approved","why",
 ] as const;
 const RECIPE_JSON = ["ingredients", "steps", "nutrition", "why"] as const;
 
@@ -372,8 +374,8 @@ app.post("/api/shopping/delete", async (c) => {
 // ---------------------------------------------------------------------------
 app.get("/api/learn/progress", async (c) => {
   const caller = c.get("caller");
-  const rows = await q<{ lesson_id: string; completed_at: string; quiz_score: number | null }>(
-    "select lesson_id, completed_at, quiz_score from learning_progress where user_id = $1 order by completed_at",
+  const rows = await q<{ lesson_id: string; completed_at: string; quiz_score: number | null; cook_rating: number | null }>(
+    "select lesson_id, completed_at, quiz_score, cook_rating from learning_progress where user_id = $1 order by completed_at",
     [caller.userId],
   );
   return c.json(rows);
@@ -382,15 +384,76 @@ app.get("/api/learn/progress", async (c) => {
 app.post("/api/learn/progress", async (c) => {
   const caller = c.get("caller");
   const body = z
-    .object({ lesson_id: z.string().min(1).max(40), quiz_score: z.number().int().min(0).max(100).nullable().optional() })
+    .object({
+      lesson_id: z.string().min(1).max(40),
+      quiz_score: z.number().int().min(0).max(100).nullable().optional(),
+      /** How the practice dish came out: 1 not good, 2 good, 3 great. */
+      cook_rating: z.number().int().min(1).max(3).nullable().optional(),
+    })
     .safeParse(await c.req.json().catch(() => null));
   if (!body.success) return c.json({ error: "bad request" }, 400);
   await q(
-    `insert into learning_progress (user_id, lesson_id, quiz_score) values ($1, $2, $3)
-     on conflict (user_id, lesson_id) do update set completed_at = now(), quiz_score = coalesce(excluded.quiz_score, learning_progress.quiz_score)`,
-    [caller.userId, body.data.lesson_id, body.data.quiz_score ?? null],
+    `insert into learning_progress (user_id, lesson_id, quiz_score, cook_rating) values ($1, $2, $3, $4)
+     on conflict (user_id, lesson_id) do update set completed_at = now(),
+       quiz_score = coalesce(excluded.quiz_score, learning_progress.quiz_score),
+       cook_rating = coalesce(excluded.cook_rating, learning_progress.cook_rating)`,
+    [caller.userId, body.data.lesson_id, body.data.quiz_score ?? null, body.data.cook_rating ?? null],
   );
   return c.json({ ok: true });
+});
+
+// ---------------------------------------------------------------------------
+// The cooking coach: a question inside a lesson, and "לבשל עם קורט" (the model
+// asks, proposes a dish or a meal, then writes it). Nothing is stored here: the
+// conversation lives in the screen, and a built dish is saved as a normal recipe.
+// ---------------------------------------------------------------------------
+const chatBody = z
+  .array(z.object({ role: z.enum(["user", "assistant"]), text: z.string().max(4000) }))
+  .min(1)
+  .max(40);
+const coachError = (err: unknown) => ({ error: (err as Error).message || "משהו השתבש" });
+
+app.post("/api/learn/ask", async (c) => {
+  const body = z
+    .object({ lesson_id: z.string().max(40).nullable().optional(), messages: chatBody })
+    .safeParse(await c.req.json().catch(() => null));
+  if (!body.success) return c.json({ error: "bad request" }, 400);
+  const lesson = body.data.lesson_id ? lessonById(body.data.lesson_id) ?? null : null;
+  try {
+    return c.json({ reply: await askLesson(lesson, body.data.messages) });
+  } catch (err) {
+    return c.json(coachError(err), 502);
+  }
+});
+
+app.post("/api/chef/turn", async (c) => {
+  const body = z.object({ messages: chatBody }).safeParse(await c.req.json().catch(() => null));
+  if (!body.success) return c.json({ error: "bad request" }, 400);
+  try {
+    return c.json(await chefTurn(body.data.messages));
+  } catch (err) {
+    return c.json(coachError(err), 502);
+  }
+});
+
+app.post("/api/chef/build", async (c) => {
+  const body = z
+    .object({
+      messages: chatBody,
+      proposal: z.object({
+        title: z.string().max(200),
+        servings: z.number().min(1).max(60),
+        dishes: z.array(z.object({ name: z.string().max(200), role: z.string().max(60), idea: z.string().max(600) })).min(1).max(4),
+        principles: z.array(z.object({ text: z.string().max(800), lesson_id: z.string().max(40).nullable() })).max(8),
+      }),
+    })
+    .safeParse(await c.req.json().catch(() => null));
+  if (!body.success) return c.json({ error: "bad request" }, 400);
+  try {
+    return c.json(await chefBuild(body.data.messages, body.data.proposal));
+  } catch (err) {
+    return c.json(coachError(err), 502);
+  }
 });
 
 app.delete("/api/learn/progress", async (c) => {

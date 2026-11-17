@@ -43,6 +43,8 @@ export const env = {
   claudeModel: process.env.CLAUDE_MODEL ?? "claude-haiku-5-5",
   /** Saw summaries: a stronger model, because the Hebrew of the small one invents words. */
   sawModel: process.env.SAW_MODEL ?? "claude-sonnet-5-5",
+  /** The cooking coach (lesson questions, "לבשל עם קורט"): the stronger model, for sound cooking judgement and clean Hebrew. */
+  coachModel: process.env.COACH_MODEL ?? "claude-sonnet-5-5",
   openaiApiKey: process.env.OPENAI_API_KEY || null,
   ytdlpPath: process.env.YTDLP_PATH || "yt-dlp",
   ffmpegPath: process.env.FFMPEG_PATH || "ffmpeg",

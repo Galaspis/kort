@@ -8,12 +8,12 @@ import { Radius, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { goBack } from "@/lib/navigation";
 
-/** The "+" sheet: import a link or write a recipe. Opens over whatever screen is active. */
+/** The "+" sheet: import a link, write a recipe, or build one with the coach. Opens over whatever screen is active. */
 export default function AddScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
 
-  function choose(path: "/import" | "/recipe/new") {
+  function choose(path: "/import" | "/recipe/new" | "/chef") {
     router.replace(path);
   }
 
@@ -67,6 +67,23 @@ export default function AddScreen() {
             <AppText variant="bodyBold">כתיבת מתכון</AppText>
             <AppText variant="caption" color="textSecondary">
               מהראש, מהמחברת של סבתא או מספר בישול
+            </AppText>
+          </View>
+        </Pressable>
+        <Pressable
+          onPress={() => choose("/chef")}
+          style={({ pressed }) => [
+            styles.option,
+            { backgroundColor: theme.elevated, opacity: pressed ? 0.8 : 1 },
+          ]}
+        >
+          <View style={[styles.icon, { backgroundColor: theme.warning }]}>
+            <Ionicons name="chatbubbles" size={22} color="#fff" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <AppText variant="bodyBold">לבשל עם קורט</AppText>
+            <AppText variant="caption" color="textSecondary">
+              בלי מתכון: קורט שואל מה יש ולכמה, ובונים יחד מנה או ארוחה
             </AppText>
           </View>
         </Pressable>

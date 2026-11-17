@@ -46,6 +46,33 @@ export interface LessonProgress {
   lesson_id: string;
   completed_at: string;
   quiz_score: number | null;
+  /** How the practice dish came out: 1 not good, 2 good, 3 great. */
+  cook_rating: number | null;
+}
+
+/** One line of a conversation with the coach. */
+export interface ChatMsg {
+  role: "user" | "assistant";
+  text: string;
+}
+
+/** "לבשל עם קורט": what the coach proposes before anything is written in full. */
+export interface ChefProposal {
+  title: string;
+  servings: number;
+  dishes: { name: string; role: string; idea: string }[];
+  principles: WhyNote[];
+}
+
+export interface ChefTurn {
+  say: string;
+  options: string[];
+  proposal: ChefProposal | null;
+}
+
+export interface ChefBuilt {
+  dishes: { recipe: RecipeContent; why: WhyNote[] }[];
+  timeline: { when: string; text: string }[];
 }
 
 export interface Me {
@@ -113,8 +140,13 @@ export const api = {
   suggestPlan: (input: { date: string; meal: string; course: string; hint?: string | null }) =>
     request<PlanSuggestion>("/api/plan/suggest", { method: "POST", body: JSON.stringify(input) }),
   learnProgress: () => request<LessonProgress[]>("/api/learn/progress"),
-  completeLesson: (lesson_id: string, quiz_score: number | null) =>
-    request<{ ok: true }>("/api/learn/progress", { method: "POST", body: JSON.stringify({ lesson_id, quiz_score }) }),
+  completeLesson: (lesson_id: string, quiz_score: number | null, cook_rating: number | null = null) =>
+    request<{ ok: true }>("/api/learn/progress", { method: "POST", body: JSON.stringify({ lesson_id, quiz_score, cook_rating }) }),
+  askLesson: (lesson_id: string | null, messages: ChatMsg[]) =>
+    request<{ reply: string }>("/api/learn/ask", { method: "POST", body: JSON.stringify({ lesson_id, messages }) }),
+  chefTurn: (messages: ChatMsg[]) => request<ChefTurn>("/api/chef/turn", { method: "POST", body: JSON.stringify({ messages }) }),
+  chefBuild: (messages: ChatMsg[], proposal: ChefProposal) =>
+    request<ChefBuilt>("/api/chef/build", { method: "POST", body: JSON.stringify({ messages, proposal }) }),
   resetLearning: () => request<{ ok: true }>("/api/learn/progress", { method: "DELETE" }),
   recipeWhy: (recipeId: string, force = false) =>
     request<{ why: WhyNote[] }>(`/api/recipes/${recipeId}/why${force ? "?force=1" : ""}`, { method: "POST" }),
