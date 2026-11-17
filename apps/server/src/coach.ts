@@ -3,10 +3,14 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import {
   LESSONS,
   RecipeAISchema,
+  StepSchema,
   deepLesson,
+  formatQuantity,
   normalizeRecipeContent,
+  type Ingredient,
   type Lesson,
   type RecipeContent,
+  type Step,
   type WhyNote,
 } from "@recipe/shared";
 import { z } from "zod";
@@ -16,6 +20,8 @@ import { env } from "./env.js";
  * The cooking coach: the two places where the cook talks with the model.
  *   askCoach   - a question from anywhere: inside a lesson ("why not olive oil?"),
  *     on a recipe ("what can replace the cream, how much and when?"), or in general.
+ *   applyToRecipe - turns what was suggested in a recipe conversation into edits of
+ *     that recipe. It only prepares them: the cook sees the changes and saves, or not.
  *   chefTurn / chefBuild - "לבשל עם קורט": the model asks what there is, for how
  *     many, how much time, proposes a dish or a whole meal, and then writes it.
  * Both stand on the same foundations as the course, and point back at lessons.
@@ -45,7 +51,7 @@ const FOUNDATIONS = `Cooking foundations (the same ones the cook is learning in 
 12. Quantities per adult: 150-200 g raw meat or fish (250 g on the bone), 80-100 g dry pasta/rice/grain, 150-200 g vegetables as a side; children roughly half. Scale to the number of eaters and say so.
 13. Timing for the number of people: what is made ahead, what rests, what must be last-minute; one pan sears about two steaks at a time.`;
 
-const VOICE = `Write in plain everyday Hebrew, warm and direct, like a friend who cooks well. No markdown, no bullet symbols, no emojis, no headings: short paragraphs only. Explain any technical word in the same sentence. Temperatures in Celsius, metric quantities. Never invent facts: if something depends on the cut, the pan or the oven, say what it depends on. Food safety comes first (poultry and minced meat cooked through, no risky shortcuts). When a course lesson covers the point, mention it by number and name, for example "(שיעור 5, השחמה)".`;
+const VOICE = `Write in plain everyday Hebrew, warm and direct, like a friend who cooks well. Speak to the cook in the plural ("אתם", "קחו", "הוסיפו"), never with slashes like "את/ה". No markdown, no bullet symbols, no emojis, no headings: short paragraphs only. Explain any technical word in the same sentence. Temperatures in Celsius, metric quantities. Never invent facts: if something depends on the cut, the pan or the oven, say what it depends on. Food safety comes first (poultry and minced meat cooked through, no risky shortcuts). When a course lesson covers the point, mention it by number and name, for example "(שיעור 5, השחמה)".`;
 
 // ---------------------------------------------------------------------------
 // One call to the model, with the same error wording everywhere.
@@ -114,12 +120,15 @@ export interface AskRecipe {
   notes: string | null;
 }
 
-function recipeText(recipe: AskRecipe, makingServings: number | null): string {
+function ingredientText(i: AskRecipe["ingredients"][number]): string {
+  return `${i.group ? `[${i.group}] ` : ""}${[i.quantity, i.unit, i.name].filter((x) => x !== null && x !== "").join(" ")}${i.note ? ` (${i.note})` : ""}`;
+}
+
+/** `numbered`: ingredients get numbers too, so that an edit can point at one. */
+function recipeText(recipe: AskRecipe, makingServings: number | null, numbered = false): string {
   const scaled = makingServings && recipe.servings && makingServings !== recipe.servings;
   const lines = [`<recipe title="${recipe.title}" written_for_servings="${recipe.servings ?? "unknown"}"${scaled ? ` cook_is_making_servings="${makingServings}"` : ""}>`, "<ingredients>"];
-  for (const i of recipe.ingredients) {
-    lines.push(`${i.group ? `[${i.group}] ` : ""}${[i.quantity, i.unit, i.name].filter((x) => x !== null && x !== "").join(" ")}${i.note ? ` (${i.note})` : ""}`);
-  }
+  recipe.ingredients.forEach((i, n) => lines.push(`${numbered ? `${n + 1}. ` : ""}${ingredientText(i)}`));
   lines.push("</ingredients>", "<steps>");
   recipe.steps.forEach((st, n) => lines.push(`${n + 1}. ${st.group ? `[${st.group}] ` : ""}${st.text}`));
   lines.push("</steps>");
@@ -154,12 +163,43 @@ export interface AskContext {
   servings?: number | null;
 }
 
-export async function askCoach(context: AskContext, history: ChatMessage[]): Promise<string> {
+/** On a recipe the answer also says whether it holds a change that could be written into the recipe. */
+const RecipeAnswerSchema = z.object({
+  reply: z.string().describe("התשובה לבשלן, בעברית, לפי כל הכללים"),
+  changes_recipe: z
+    .boolean()
+    .describe(
+      "true רק כשהתשובה מציעה שינוי מוחשי במתכון כפי שהוא כתוב (החלפה, הוספה או הורדה של מצרך, כמות אחרת, זמן או שיטה אחרים) שאפשר לכתוב לתוך המתכון. false להסבר, לאבחון תקלה, לעצות אחסון והכנה מראש, ולשאלת הבהרה",
+    ),
+});
+
+const RECIPE_BUTTON = `You cannot edit the recipe yourself. Under an answer of yours that holds a concrete change, the app shows a button "לעדכן את המתכון לפי ההצעה": it shows the cook exactly what would change and saves only if they approve. If the cook asks you to update, fix or save the recipe, say in one sentence that this button does it (when the conversation already holds a concrete change, set changes_recipe to true so the button appears; when it does not, ask what to change). Never say that you changed the recipe.
+
+A line in the conversation that starts with "עדכנתי את המתכון" was written by the app after the cook approved such an update: it is a fact, and the recipe below already includes those changes, so answer from the recipe as it is now and do not comment on that line. A line "ביטלתי את העדכון" means the cook undid the last update and the recipe below is back to what it was.`;
+
+export interface CoachAnswer {
+  reply: string;
+  /** Only ever true on a recipe: the app then offers to write the change into it. */
+  changes_recipe: boolean;
+}
+
+export async function askCoach(context: AskContext, history: ChatMessage[]): Promise<CoachAnswer> {
   const messages = toMessages(history);
   if (!messages.length) throw new Error("חסרה שאלה");
   const system: Anthropic.Beta.Messages.BetaTextBlockParam[] = [{ type: "text", text: ASK_SYSTEM, cache_control: { type: "ephemeral" } }];
   if (context.lesson) system.push({ type: "text", text: `The lesson the cook is in right now:\n${lessonText(context.lesson)}` });
-  if (context.recipe) system.push({ type: "text", text: `The recipe the cook is asking about:\n${recipeText(context.recipe, context.servings ?? null)}` });
+
+  if (context.recipe) {
+    system.push({ type: "text", text: `${RECIPE_BUTTON}\n\nThe recipe the cook is asking about:\n${recipeText(context.recipe, context.servings ?? null)}` });
+    const response = await client.beta.messages
+      .parse(request({ max_tokens: 4000, system, messages, output_config: { effort: "low", format: zodOutputFormat(RecipeAnswerSchema) } }))
+      .catch(explain);
+    checkStop(response.stop_reason);
+    const reply = response.parsed_output?.reply.trim();
+    if (!reply) throw new Error("לא קיבלתי תשובה. נסו שוב.");
+    return { reply, changes_recipe: response.parsed_output!.changes_recipe };
+  }
+
   const response = await client.beta.messages
     .create(request({ max_tokens: 4000, system, messages, output_config: { effort: "low" } }))
     .catch(explain);
@@ -170,7 +210,189 @@ export async function askCoach(context: AskContext, history: ChatMessage[]): Pro
     .join("\n")
     .trim();
   if (!text) throw new Error("לא קיבלתי תשובה. נסו שוב.");
-  return text;
+  return { reply: text, changes_recipe: false };
+}
+
+// ---------------------------------------------------------------------------
+// Writing a suggestion into the recipe.
+// The model does not rewrite the recipe: it returns a short list of edits that
+// point at the ORIGINAL ingredient and step numbers. They are applied here, so
+// every line the suggestion does not touch stays exactly as it was, and the
+// preview the cook approves is made from the same edits that get saved.
+// ---------------------------------------------------------------------------
+const ACTION = z.enum(["replace", "remove", "add"]);
+
+const EditsSchema = z.object({
+  summary: z.string().describe("משפט אחד בעברית: מה משתנה במתכון. ריק כשאין מה לשנות"),
+  ingredient_edits: z.array(
+    z.object({
+      action: ACTION,
+      number: z
+        .number()
+        .nullable()
+        .describe("מספר המצרך ברשימה המקורית. חובה ב-replace וב-remove. ב-add: המצרך שאחריו נכנס החדש, או null לסוף הרשימה"),
+      ingredient: RecipeAISchema.shape.ingredients.element.nullable().describe("המצרך החדש במלואו ב-replace וב-add. null ב-remove"),
+    }),
+  ),
+  step_edits: z.array(
+    z.object({
+      action: ACTION,
+      number: z
+        .number()
+        .nullable()
+        .describe("מספר השלב המקורי. חובה ב-replace וב-remove. ב-add: השלב שאחריו נכנס החדש, 0 = לפני השלב הראשון"),
+      step: StepSchema.nullable().describe("השלב החדש במלואו ב-replace וב-add. null ב-remove"),
+    }),
+  ),
+  title: z.string().nullable().describe("שם חדש למתכון רק אם השם הנוכחי מזכיר מצרך שהוחלף או ירד. אחרת null"),
+});
+
+const APPLY_SYSTEM = `You are Kort, the cooking teacher inside a family's recipe app. The cook talked with you about one of the family's recipes (the conversation follows) and now pressed "update the recipe according to the suggestion". Turn what was agreed in the conversation into edits of the recipe below. The app shows the cook your edits and saves them only if they approve.
+
+Which changes: the concrete changes to the recipe that you suggested in the conversation and the cook did not turn down. When you offered alternatives, take the one the cook chose; if they did not choose, the one you recommended first. A line in the conversation that says the recipe was already updated means those changes are in the recipe below: do not repeat them. If the conversation holds no concrete change to the recipe (only an explanation, a diagnosis, or advice about storing and making ahead), return empty lists and an empty summary.
+
+How to write the edits:
+- Numbers always refer to the recipe as it is given below (the original numbering), also when you add or remove other lines.
+- Touch only what the change needs. Do not list an ingredient or a step that stays the same, do not improve wording, do not reorder.
+- The recipe must read correctly from top to bottom afterwards: every step that names a replaced or removed ingredient, or whose time, heat or order changes because of it, gets a "replace" with its full new text. A step you replace keeps its wording wherever the change does not touch it. Something from the conversation that the cook should now skip or reduce (salt, liquid, a few minutes of cooking) is written into the step where it happens. The same goes for the note of another ingredient that names a replaced one ("לתרד ולסיום"): replace that ingredient with only its note corrected.
+- Quantities are for the number of servings the recipe is WRITTEN for (written_for_servings). If the conversation gave amounts for a different number of servings, convert them back.
+- A new or replaced ingredient is complete: name without the amount, quantity, unit, note, the same "group" label as its neighbours when the recipe has groups, and the supermarket aisle. A new or replaced step keeps the "group" of its place, and has duration_seconds when it waits.
+- Steps are short, one action each, in plain Hebrew, in the same style as the recipe's own steps. No markdown, no emojis.
+- Food safety comes first: never write an edit that leaves poultry or minced meat undercooked.
+
+${FOUNDATIONS}`;
+
+export interface RecipeChange {
+  where: "ingredient" | "step" | "title";
+  kind: "add" | "remove" | "change";
+  /** "שלב 4", "שלב חדש אחרי 4", or null for an ingredient. */
+  label: string | null;
+  before: string | null;
+  after: string | null;
+}
+
+export interface RecipeEdit {
+  summary: string;
+  changes: RecipeChange[];
+  /** What to PATCH into the recipe when the cook approves. Empty when there is nothing to change. */
+  patch: { title?: string; ingredients?: Ingredient[]; steps?: Step[] };
+}
+
+/** The recipe as stored: the edit keeps every untouched line of it. */
+export interface EditableRecipe extends RecipeContent {
+  notes: string | null;
+}
+
+function ingredientLabel(i: Ingredient): string {
+  return `${[formatQuantity(i.quantity), i.unit, i.name].filter(Boolean).join(" ")}${i.note ? ` (${i.note})` : ""}`;
+}
+
+/**
+ * Applies edits that point at original numbers. One edit per original line (the
+ * first wins); additions keep the order the model gave them.
+ */
+function applyEdits<T>(
+  original: T[],
+  edits: { action: "replace" | "remove" | "add"; number: number | null; item: T | null }[],
+): { result: T[]; replaced: Map<number, T>; removed: Set<number>; added: { after: number; item: T }[] } {
+  const replaced = new Map<number, T>();
+  const removed = new Set<number>();
+  const added: { after: number; item: T }[] = [];
+  for (const e of edits) {
+    const n = e.number === null ? null : Math.round(e.number);
+    if (e.action === "add") {
+      if (!e.item) continue;
+      added.push({ after: n === null ? original.length : Math.min(Math.max(n, 0), original.length), item: e.item });
+    } else if (n !== null && n >= 1 && n <= original.length && !replaced.has(n) && !removed.has(n)) {
+      if (e.action === "remove") removed.add(n);
+      else if (e.item) replaced.set(n, e.item);
+    }
+  }
+  const result: T[] = [];
+  const addAfter = (n: number) => added.filter((a) => a.after === n).forEach((a) => result.push(a.item));
+  addAfter(0);
+  original.forEach((item, i) => {
+    const n = i + 1;
+    if (replaced.has(n)) result.push(replaced.get(n)!);
+    else if (!removed.has(n)) result.push(item);
+    addAfter(n);
+  });
+  return { result, replaced, removed, added };
+}
+
+export async function applyToRecipe(recipe: EditableRecipe, makingServings: number | null, history: ChatMessage[]): Promise<RecipeEdit> {
+  const messages = toMessages(history);
+  if (!messages.length) throw new Error("אין עדיין שיחה שאפשר לעדכן לפיה.");
+  const response = await client.beta.messages
+    .parse(
+      request({
+        max_tokens: 8000,
+        system: [
+          { type: "text", text: APPLY_SYSTEM, cache_control: { type: "ephemeral" } },
+          { type: "text", text: `The recipe to edit:\n${recipeText(recipe, makingServings, true)}` },
+        ],
+        messages: [...messages, { role: "user", content: "עדכן את המתכון לפי מה שהצעת בשיחה." }],
+        output_config: { effort: "medium", format: zodOutputFormat(EditsSchema) },
+      }),
+    )
+    .catch(explain);
+  checkStop(response.stop_reason);
+  const out = response.parsed_output;
+  if (!out) throw new Error("לא הצלחתי להכין את העדכון. נסו שוב.");
+
+  // New ingredients go through the same clean-up as an imported recipe (aisle names).
+  const cleanIngredient = (ing: NonNullable<(typeof out.ingredient_edits)[number]["ingredient"]>): Ingredient =>
+    normalizeRecipeContent({ ...recipe, ingredients: [{ ...ing, name: ing.name.trim() }], steps: [] }).ingredients[0]!;
+  const ing = applyEdits<Ingredient>(
+    recipe.ingredients,
+    out.ingredient_edits.map((e) => ({ action: e.action, number: e.number, item: e.ingredient?.name.trim() ? cleanIngredient(e.ingredient) : null })),
+  );
+  const st = applyEdits<Step>(
+    recipe.steps,
+    out.step_edits.map((e) => ({ action: e.action, number: e.number, item: e.step?.text.trim() ? { ...e.step, text: e.step.text.trim() } : null })),
+  );
+
+  const changes: RecipeChange[] = [];
+  recipe.ingredients.forEach((old, i) => {
+    const n = i + 1;
+    if (ing.removed.has(n)) changes.push({ where: "ingredient", kind: "remove", label: null, before: ingredientLabel(old), after: null });
+    const next = ing.replaced.get(n);
+    if (next && ingredientLabel(next) !== ingredientLabel(old))
+      changes.push({ where: "ingredient", kind: "change", label: null, before: ingredientLabel(old), after: ingredientLabel(next) });
+  });
+  ing.added.forEach((a) => changes.push({ where: "ingredient", kind: "add", label: null, before: null, after: ingredientLabel(a.item) }));
+
+  // Steps in the order they will be read, numbered as they are today (that is what the cook knows).
+  const stepAdds = (n: number) =>
+    st.added
+      .filter((a) => a.after === n)
+      .forEach((a) => changes.push({ where: "step", kind: "add", label: n === 0 ? "שלב חדש בהתחלה" : `שלב חדש אחרי שלב ${n}`, before: null, after: a.item.text }));
+  stepAdds(0);
+  recipe.steps.forEach((old, i) => {
+    const n = i + 1;
+    if (st.removed.has(n)) changes.push({ where: "step", kind: "remove", label: `שלב ${n}`, before: old.text, after: null });
+    const next = st.replaced.get(n);
+    if (next && next.text !== old.text) changes.push({ where: "step", kind: "change", label: `שלב ${n}`, before: old.text, after: next.text });
+    stepAdds(n);
+  });
+
+  const title = out.title?.trim();
+  const newTitle = title && title !== recipe.title ? title : null;
+  const touched = (where: RecipeChange["where"]) => changes.some((c) => c.where === where);
+  // A new name alone is not a change to the recipe.
+  if (newTitle && changes.length) changes.unshift({ where: "title", kind: "change", label: null, before: recipe.title, after: newTitle });
+
+  if (!touched("ingredient") && !touched("step")) return { summary: "", changes: [], patch: {} };
+  if (!st.result.length || !ing.result.length) throw new Error("העדכון היה מוחק את כל המתכון, אז לא הכנתי אותו. נסו לנסח את הבקשה אחרת.");
+  return {
+    summary: out.summary.trim(),
+    changes,
+    patch: {
+      ...(newTitle ? { title: newTitle } : {}),
+      ...(touched("ingredient") ? { ingredients: ing.result } : {}),
+      ...(touched("step") ? { steps: st.result } : {}),
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

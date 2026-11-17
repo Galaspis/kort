@@ -166,7 +166,17 @@ deep format as a pilot; the other 23 keep the short one until the format is judg
   From a lesson (`?lesson=`) the model gets the lesson's full text. From a recipe page or cooking
   mode (`?recipe=&servings=`) it gets the whole recipe and the servings chosen on screen, so a
   swap or an addition comes back with the amount and the step number it goes into. From the home
-  screen and the Learn tab it is a general cooking question. It only advises; it does not edit the recipe.
+  screen and the Learn tab it is a general cooking question.
+- **Writing a suggestion into the recipe** (`POST /api/ask/apply`, added 2026-11-17): the coach never
+  edits a recipe by itself. On a recipe, an answer that holds a concrete change gets a button
+  "לעדכן את המתכון לפי ההצעה". The server asks the model for a short list of edits that point at the
+  original ingredient and step numbers (replace / remove / add), applies them itself, and returns
+  the list of changes plus the patch; nothing is saved. The screen shows "מה ישתנה במתכון" (old line
+  struck through, new line under it) and only "לשמור במתכון" sends the patch (a normal
+  `PATCH /api/recipes/:id`). Untouched lines stay exactly as they were, amounts are written for the
+  recipe's own servings (not the number chosen on screen), and "לבטל את השינוי" puts the previous
+  version back while the screen is open. The cached "why it works" notes and the nutrition
+  estimate are not recalculated.
 - **לבשל עם קורט** (`app/chef.tsx`, from the "+" sheet and the Learn tab): no recipe to start from.
   The model asks one thing at a time with tappable answers (what is in the house, how many eaters,
   time, equipment, limits), proposes a dish or a meal with the reasons it is built right, and on

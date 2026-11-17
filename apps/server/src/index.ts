@@ -22,7 +22,7 @@ import { resolveCaller, type Caller } from "./auth.js";
 import { migrate, one, q, setClause } from "./db.js";
 import { env } from "./env.js";
 import { backfillShoppingMeta, enrichShoppingItems } from "./grocery.js";
-import { askCoach, chefBuild, chefTurn } from "./coach.js";
+import { applyToRecipe, askCoach, chefBuild, chefTurn } from "./coach.js";
 import { explainRecipe } from "./learn.js";
 import { COURSE_IDS, MEAL_IDS, suggestForSlot } from "./plan.js";
 import { enrichManualRecipe, estimateNutrition } from "./import/extract.js";
@@ -431,7 +431,26 @@ app.post("/api/ask", async (c) => {
     : null;
   if (body.data.recipe_id && !recipe) return c.json({ error: "המתכון לא נמצא" }, 404);
   try {
-    return c.json({ reply: await askCoach({ lesson, recipe, servings: body.data.servings ?? null }, body.data.messages) });
+    return c.json(await askCoach({ lesson, recipe, servings: body.data.servings ?? null }, body.data.messages));
+  } catch (err) {
+    return c.json(coachError(err), 502);
+  }
+});
+
+/**
+ * Turns what the coach suggested in a recipe conversation into edits of that recipe.
+ * Saves nothing: the app shows the changes, and the cook's approval is a normal PATCH.
+ */
+app.post("/api/ask/apply", async (c) => {
+  const caller = c.get("caller");
+  const body = z
+    .object({ recipe_id: z.string().uuid(), servings: z.number().min(0.25).max(200).nullable().optional(), messages: chatBody })
+    .safeParse(await c.req.json().catch(() => null));
+  if (!body.success) return c.json({ error: "bad request" }, 400);
+  const recipe = await one<RecipeRow>("select * from recipes where id = $1 and household_id = $2", [body.data.recipe_id, caller.householdId]);
+  if (!recipe) return c.json({ error: "המתכון לא נמצא" }, 404);
+  try {
+    return c.json(await applyToRecipe(recipe, body.data.servings ?? null, body.data.messages));
   } catch (err) {
     return c.json(coachError(err), 502);
   }

@@ -1,4 +1,4 @@
-import type { ImportJobRow, MealPlanRow, Nutrition, RecipeContent, RecipeRow, ShoppingItemRow, ShoppingListRow, ShoppingListSummary, WhyNote } from "@recipe/shared";
+import type { ImportJobRow, Ingredient, MealPlanRow, Nutrition, RecipeContent, RecipeRow, ShoppingItemRow, ShoppingListRow, ShoppingListSummary, Step, WhyNote } from "@recipe/shared";
 
 import { env } from "./env";
 
@@ -54,6 +54,22 @@ export interface LessonProgress {
 export interface ChatMsg {
   role: "user" | "assistant";
   text: string;
+}
+
+/** One line of "what will change" when a suggestion is written into a recipe. */
+export interface RecipeChange {
+  where: "ingredient" | "step" | "title";
+  kind: "add" | "remove" | "change";
+  label: string | null;
+  before: string | null;
+  after: string | null;
+}
+
+/** A suggestion prepared as an edit of the recipe. Nothing is saved until `patch` is sent. */
+export interface RecipeEdit {
+  summary: string;
+  changes: RecipeChange[];
+  patch: { title?: string; ingredients?: Ingredient[]; steps?: Step[] };
 }
 
 /** "לבשל עם קורט": what the coach proposes before anything is written in full. */
@@ -143,7 +159,9 @@ export const api = {
   completeLesson: (lesson_id: string, quiz_score: number | null, cook_rating: number | null = null) =>
     request<{ ok: true }>("/api/learn/progress", { method: "POST", body: JSON.stringify({ lesson_id, quiz_score, cook_rating }) }),
   ask: (context: { lesson_id?: string | null; recipe_id?: string | null; servings?: number | null }, messages: ChatMsg[]) =>
-    request<{ reply: string }>("/api/ask", { method: "POST", body: JSON.stringify({ ...context, messages }) }),
+    request<{ reply: string; changes_recipe: boolean }>("/api/ask", { method: "POST", body: JSON.stringify({ ...context, messages }) }),
+  askApply: (recipe_id: string, servings: number | null, messages: ChatMsg[]) =>
+    request<RecipeEdit>("/api/ask/apply", { method: "POST", body: JSON.stringify({ recipe_id, servings, messages }) }),
   chefTurn: (messages: ChatMsg[]) => request<ChefTurn>("/api/chef/turn", { method: "POST", body: JSON.stringify({ messages }) }),
   chefBuild: (messages: ChatMsg[], proposal: ChefProposal) =>
     request<ChefBuilt>("/api/chef/build", { method: "POST", body: JSON.stringify({ messages, proposal }) }),
