@@ -155,6 +155,13 @@ export default function RecipesScreen() {
                 onPress={() => router.push("/settings")}
                 style={{ position: "absolute", left: 0 }}
               />
+              <IconButton
+                icon="chatbubble-ellipses-outline"
+                color="textMuted"
+                accessibilityLabel="שאלה לקורט"
+                onPress={() => router.push("/learn/ask")}
+                style={{ position: "absolute", right: 0 }}
+              />
             </Row>
 
             <Row

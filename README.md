@@ -153,24 +153,27 @@ deep format as a pilot; the other 23 keep the short one until the format is judg
 - **Deep lesson**: a lesson with an entry in `packages/shared/src/course-deep.ts` replaces the
   experiment with three stages: **לראות** (an interactive picture drawn in the app,
   `components/learn/browning-sim.tsx`: drag the pan temperature, switch dry/wet, and see the crust,
-  the grey band, steam, smoke, time and sound; then short clips of what it should look like),
+  the grey band, steam, smoke, time and sound; then the signs to recognise at the stove, as text),
   **לבשל** (a complete practice dish, not from the family's recipes, step by step with
   "what do you see / hear?" stops, `components/learn/guided-cook.tsx`; the family's matching recipes
   are offered next to it) and **תקלות** (the common failures, each drawn, with cause and fix). The
   quiz gets harder questions, and the last page asks how the dish came out
   (`learning_progress.cook_rating`, 1-3).
-- **Clips**: each clip has a title, what to look for, and an English prompt for a video model.
-  `video` is null until the clip exists, and the app then shows "הסרטון בהכנה" with the text. A
-  finished clip goes to `/srv/kort/media/course/<lesson>/<clip>.mp4` and its `video` is set to
-  `/media/course/<lesson>/<clip>.mp4`. No clip has been generated yet (it needs a paid video service).
-- **שאלה** (top of every lesson, `app/learn/ask.tsx` → `POST /api/learn/ask`): a question to the
-  coach. The model gets the lesson's full text, so the answer is in its context.
+- **No video**: clip slots for AI-generated video were built and removed the same day
+  (2026-11-17). Gal decided the cost (about 0.5 USD per 8-second clip, several tries each) is not
+  worth it; the signs stay as short texts.
+- **שאלה לקורט** (`app/learn/ask.tsx` → `POST /api/ask`): a question to the coach from anywhere.
+  From a lesson (`?lesson=`) the model gets the lesson's full text. From a recipe page or cooking
+  mode (`?recipe=&servings=`) it gets the whole recipe and the servings chosen on screen, so a
+  swap or an addition comes back with the amount and the step number it goes into. From the home
+  screen and the Learn tab it is a general cooking question. It only advises; it does not edit the recipe.
 - **לבשל עם קורט** (`app/chef.tsx`, from the "+" sheet and the Learn tab): no recipe to start from.
   The model asks one thing at a time with tappable answers (what is in the house, how many eaters,
   time, equipment, limits), proposes a dish or a meal with the reasons it is built right, and on
   approval writes full recipes (`POST /api/chef/turn`, `POST /api/chef/build`: one call per dish in
   parallel, then the working order of the meal). Saved dishes are normal recipes with their
-  "why it works" notes already filled and the tag "קורט". The conversation is not stored.
+  "why it works" notes already filled and the tag "קורט". A meal can be saved whole or one dish at
+  a time. The conversation is not stored.
 - All three stand on one list of cooking foundations and the lesson index in
   `apps/server/src/coach.ts`, and point back at lessons by id. They use `COACH_MODEL`
   (default `claude-sonnet-5-5`, the stronger model, like Saw), not the Haiku that imports recipes:

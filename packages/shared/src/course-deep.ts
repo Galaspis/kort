@@ -1,7 +1,7 @@
 /**
  * "Deep" lessons: the master-course format on top of a regular lesson.
  * A lesson that has an entry here gets, after its idea cards:
- *   see   → an interactive picture and short clips of what it should look like
+ *   see   → an interactive picture and the signs to look and listen for at the stove
  *   cook  → a real dish, step by step, with "what do you see?" checkpoints
  *   fix   → the common failures, what caused them and what to do
  *   quiz  → the regular questions plus harder ones
@@ -9,16 +9,11 @@
  */
 import type { QuizQuestion } from "./course";
 
-/** A short clip of what something should look like. `video` stays null until the clip is made. */
-export interface LessonClip {
+/** One sign to recognise at the stove: what it looks and sounds like when it is right. */
+export interface LessonSign {
   id: string;
   title: string;
-  /** What to look (and listen) for. Shown under the clip, and instead of it while there is no video. */
   look: string;
-  /** Served from /media/course/<lesson>/<id>.mp4 once it exists. */
-  video: string | null;
-  /** English prompt for the video model that makes the clip. Not shown in the app. */
-  prompt: string;
 }
 
 /** A stop in the guided cook where the cook compares the pan with what it should be. */
@@ -63,7 +58,7 @@ export interface DeepLesson {
   /** Which interactive picture the app shows. One per lesson, drawn in the app. */
   visual: "browning";
   visualIntro: string;
-  clips: LessonClip[];
+  signs: LessonSign[];
   dishes: GuidedDish[];
   failures: LessonFailure[];
   /** Harder questions, asked after the lesson's regular quiz. */
@@ -75,38 +70,26 @@ export const DEEP_LESSONS: Record<string, DeepLesson> = {
     visual: "browning",
     visualIntro:
       "הזיזו את טמפרטורת המחבת וראו מה קורה לסטייק. אחר כך נסו את אותו הדבר עם בשר רטוב.",
-    clips: [
+    signs: [
       {
         id: "oil-ready",
         title: "שמן שמוכן לצריבה",
         look: "השמן מנצנץ ונע במחבת בקלות כמו מים, עם אדוות דקות על פניו. חוט עשן ראשון אומר: עכשיו.",
-        video: null,
-        prompt:
-          "Close-up, 45-degree angle, of a stainless steel skillet on a gas flame. A thin layer of neutral oil heats until it shimmers and ripples and flows as fluidly as water when the pan is tilted slightly; one faint wisp of smoke rises at the end. No food, no hands, no text. Natural kitchen light, shallow depth of field, realistic.",
       },
       {
         id: "wet-vs-dry",
         title: "רטוב מול יבש",
         look: "אותה מחבת, אותו חום. הנתח היבש רוחש ומקבל קרום חום. הנתח הרטוב מעלה אדים, שלולית נוזלים סביבו, והוא נשאר אפור.",
-        video: null,
-        prompt:
-          "Overhead shot of one hot cast-iron skillet with two raw beef steaks placed side by side. The left steak is patted dry and sears: steady sizzling, a deep brown crust forming at its edges. The right steak is visibly wet: steam billows, grey liquid pools around it and it turns pale grey with no crust. No hands, no text. Realistic, natural light.",
       },
       {
         id: "releases",
         title: "הקרום משתחרר לבד",
         look: "אחרי שתי דקות בלי לגעת, הנתח מתרומם מהמחבת בלי התנגדות ומתחתיו קרום חום אחיד. אם הוא דבוק, הוא עוד לא מוכן להיפוך.",
-        video: null,
-        prompt:
-          "Close-up side view of a steak searing in a stainless steel skillet. Metal tongs lift one edge of the steak: it releases cleanly from the pan with no sticking, revealing an even deep-brown crust underneath, then it is turned over. Only the tongs are visible, no hands, no text. Realistic, natural light.",
       },
       {
         id: "fond",
         title: "פונד ודגלייז",
         look: "בתחתית המחבת נשארים כתמים חומים (לא שחורים). שופכים נוזל, מגרדים בכף עץ, והנוזל הופך תוך שניות לרוטב חום.",
-        video: null,
-        prompt:
-          "Close-up of an empty stainless steel skillet just after searing meat, with brown (not black) caramelized bits stuck to the bottom. Red wine is poured in and bubbles vigorously; a wooden spoon scrapes the bottom and the liquid turns into a glossy brown sauce as the pan bottom becomes clean. Only the spoon is visible, no hands, no text. Realistic, natural light.",
       },
     ],
     dishes: [

@@ -66,7 +66,10 @@ export default function ChefScreen() {
   const [building, setBuilding] = useState(false);
   const [caption, setCaption] = useState(0);
   const [built, setBuilt] = useState<ChefBuilt | null>(null);
-  const [saving, setSaving] = useState(false);
+  /** Which dishes are already in the recipe book: dish index → recipe id. */
+  const [savedIds, setSavedIds] = useState<Record<number, string>>({});
+  /** The dish being saved right now, or "all". */
+  const [saving, setSaving] = useState<number | "all" | null>(null);
   const alive = useRef(true);
   useEffect(() => () => void (alive.current = false), []);
 
@@ -113,36 +116,58 @@ export default function ChefScreen() {
     }
   }
 
-  async function save() {
-    if (!built) return;
-    setSaving(true);
+  /** Saves one dish as a normal recipe (with its "why it works" notes) and returns the new recipe's id. */
+  async function saveDish(index: number): Promise<string> {
+    const dish = built!.dishes[index]!;
+    const row = await api.createRecipe({ ...dish.recipe, why: dish.why });
+    // A stock photo in the background; the list refreshes when it arrives.
+    api
+      .findImage(row.id)
+      .then(() => queryClient.invalidateQueries({ queryKey: keys.recipes }))
+      .catch(() => undefined);
+    return row.id;
+  }
+
+  /** One dish out of a meal: it is saved and the screen stays, so the others can be saved or skipped. */
+  async function saveOne(index: number) {
+    if (!built || saving !== null) return;
+    setSaving(index);
     try {
-      const rows = [];
-      for (const dish of built.dishes) {
-        rows.push(await api.createRecipe({ ...dish.recipe, why: dish.why }));
-      }
-      // A stock photo for each, in the background; the list refreshes when they arrive.
-      for (const row of rows) {
-        api
-          .findImage(row.id)
-          .then(() => queryClient.invalidateQueries({ queryKey: keys.recipes }))
-          .catch(() => undefined);
-      }
+      const id = await saveDish(index);
+      if (alive.current) setSavedIds((ids) => ({ ...ids, [index]: id }));
       await queryClient.invalidateQueries({ queryKey: keys.recipes });
-      if (rows.length === 1) router.replace({ pathname: "/recipe/[id]", params: { id: rows[0]!.id } });
-      else {
-        dialog.alert("נשמר", `${rows.length} מתכונים נוספו לספר המתכונים.`);
-        router.replace("/");
-      }
     } catch (e) {
       dialog.alert("השמירה נכשלה", (e as Error).message);
     } finally {
-      if (alive.current) setSaving(false);
+      if (alive.current) setSaving(null);
+    }
+  }
+
+  /** Everything that is not saved yet. A single dish opens as a recipe right away. */
+  async function saveAll() {
+    if (!built || saving !== null) return;
+    setSaving("all");
+    try {
+      const ids = { ...savedIds };
+      for (let i = 0; i < built.dishes.length; i++) {
+        if (ids[i]) continue;
+        ids[i] = await saveDish(i);
+        if (alive.current) setSavedIds({ ...ids });
+      }
+      await queryClient.invalidateQueries({ queryKey: keys.recipes });
+      if (built.dishes.length === 1) router.replace({ pathname: "/recipe/[id]", params: { id: ids[0]! } });
+    } catch (e) {
+      dialog.alert("השמירה נכשלה", (e as Error).message);
+    } finally {
+      if (alive.current) setSaving(null);
     }
   }
 
   // ----- the finished dish or meal -----
   if (built) {
+    const many = built.dishes.length > 1;
+    const savedCount = Object.keys(savedIds).length;
+    const allSaved = savedCount === built.dishes.length;
     return (
       <Screen>
         <ScrollView contentContainerStyle={[styles.result, { paddingBottom: insets.bottom + 110 }]}>
@@ -236,19 +261,53 @@ export default function ChefScreen() {
                   ))}
                 </View>
               ) : null}
+
+              {many ? (
+                savedIds[d] ? (
+                  <Row style={styles.savedRow}>
+                    <Ionicons name="checkmark-circle" size={20} color={theme.accent} />
+                    <AppText variant="label" color="accent" style={{ flex: 1 }}>
+                      נשמר בספר המתכונים
+                    </AppText>
+                    <Button
+                      title="לפתוח"
+                      variant="ghost"
+                      size="sm"
+                      icon="chevron-back"
+                      onPress={() => router.push({ pathname: "/recipe/[id]", params: { id: savedIds[d]! } })}
+                    />
+                  </Row>
+                ) : (
+                  <Button
+                    title="לשמור רק את המנה הזאת"
+                    variant="secondary"
+                    size="sm"
+                    icon="bookmark-outline"
+                    loading={saving === d}
+                    disabled={saving !== null}
+                    onPress={() => saveOne(d)}
+                    style={{ marginTop: Spacing.sm }}
+                  />
+                )
+              ) : null}
             </Card>
           ))}
         </ScrollView>
 
         <View style={[styles.footer, { backgroundColor: theme.background, borderTopColor: theme.border, paddingBottom: insets.bottom + Spacing.sm }]}>
-          <Button title="חזרה לשיחה" variant="ghost" icon="chevron-forward" onPress={() => setBuilt(null)} disabled={saving} />
+          <Button title="חזרה לשיחה" variant="ghost" icon="chevron-forward" onPress={() => setBuilt(null)} disabled={saving !== null} />
           <View style={{ flex: 1 }} />
-          <Button
-            title={built.dishes.length > 1 ? `לשמור ${built.dishes.length} מתכונים` : "לשמור למתכונים"}
-            icon="bookmark-outline"
-            loading={saving}
-            onPress={save}
-          />
+          {allSaved ? (
+            <Button title="לספר המתכונים" icon="checkmark" onPress={() => router.replace("/")} />
+          ) : (
+            <Button
+              title={!many ? "לשמור למתכונים" : savedCount ? `לשמור את ${built.dishes.length - savedCount} הנותרות` : `לשמור את כל ${built.dishes.length} המנות`}
+              icon="bookmark-outline"
+              loading={saving === "all"}
+              disabled={saving !== null}
+              onPress={saveAll}
+            />
+          )}
         </View>
       </Screen>
     );
@@ -322,6 +381,7 @@ const styles = StyleSheet.create({
   bullet: { width: 6, height: 6, borderRadius: 3, marginTop: 9 },
   num: { width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", marginTop: 1 },
   why: { padding: Spacing.sm + 4, borderRadius: Radius.sm, gap: 8, marginTop: Spacing.sm },
+  savedRow: { gap: 8, marginTop: Spacing.sm },
   footer: {
     position: "absolute",
     bottom: 0,

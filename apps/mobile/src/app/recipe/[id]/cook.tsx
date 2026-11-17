@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { ingredientsForStep } from "@recipe/shared";
 import * as Haptics from "expo-haptics";
 import { useKeepAwake } from "expo-keep-awake";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Pressable,
@@ -145,6 +145,12 @@ export default function CookScreen() {
             ))}
           </Row>
         </View>
+        <IconButton
+          icon="chatbubble-ellipses-outline"
+          circle
+          accessibilityLabel="שאלה לקורט על המתכון"
+          onPress={() => router.push({ pathname: "/learn/ask", params: { recipe: recipe.id, servings: String(target ?? "") } })}
+        />
         <IconButton
           icon={showIngredients ? "list-circle" : "list"}
           color={showIngredients ? "primary" : "text"}

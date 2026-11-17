@@ -94,6 +94,20 @@ export default function LearnScreen() {
           <Ionicons name="chevron-back" size={18} color={theme.textMuted} />
         </Pressable>
 
+        {/* A cooking question, not tied to a lesson */}
+        <Pressable onPress={() => router.push("/learn/ask")} style={[styles.tool, Shadows.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={[styles.toolIcon, { backgroundColor: theme.primarySoft }]}>
+            <Text style={{ fontSize: 22 }}>💬</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <AppText variant="label">שאלה לקורט</AppText>
+            <AppText variant="caption" color="textSecondary">
+              למה משהו עובד, מה השתבש, מה לעשות אחרת
+            </AppText>
+          </View>
+          <Ionicons name="chevron-back" size={18} color={theme.textMuted} />
+        </Pressable>
+
         {/* Build a dish with the coach, on the same foundations as the lessons */}
         <Pressable onPress={() => router.push("/chef")} style={[styles.tool, Shadows.card, { backgroundColor: theme.card, borderColor: theme.border }]}>
           <View style={[styles.toolIcon, { backgroundColor: theme.warningSoft }]}>

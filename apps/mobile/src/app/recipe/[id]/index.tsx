@@ -95,6 +95,12 @@ export default function RecipeScreen() {
 
   const baseServings = recipe?.servings ?? null;
   const currentServings = servings ?? baseServings;
+
+  /** A question about this recipe: the coach gets the recipe and the servings chosen here. */
+  function askKort() {
+    if (!recipe) return;
+    router.push({ pathname: "/learn/ask", params: { recipe: recipe.id, servings: String(currentServings ?? "") } });
+  }
   const factor =
     baseServings && currentServings ? currentServings / baseServings : 1;
 
@@ -222,6 +228,12 @@ export default function RecipeScreen() {
               onPress={() => goBack()}
             />
             <View style={{ flex: 1 }} />
+            <IconButton
+              icon="chatbubble-ellipses-outline"
+              circle
+              accessibilityLabel="שאלה לקורט על המתכון"
+              onPress={askKort}
+            />
             <IconButton
               icon={recipe.is_favorite ? "heart" : "heart-outline"}
               color={recipe.is_favorite ? "primary" : "text"}
@@ -875,6 +887,11 @@ export default function RecipeScreen() {
             </AppText>
             {(
               [
+                {
+                  icon: "chatbubble-ellipses-outline",
+                  label: "שאלה לקורט על המתכון",
+                  run: askKort,
+                },
                 {
                   icon: "logo-whatsapp",
                   label: "שליחה בוואטסאפ",

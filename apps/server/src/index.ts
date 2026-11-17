@@ -22,7 +22,7 @@ import { resolveCaller, type Caller } from "./auth.js";
 import { migrate, one, q, setClause } from "./db.js";
 import { env } from "./env.js";
 import { backfillShoppingMeta, enrichShoppingItems } from "./grocery.js";
-import { askLesson, chefBuild, chefTurn } from "./coach.js";
+import { askCoach, chefBuild, chefTurn } from "./coach.js";
 import { explainRecipe } from "./learn.js";
 import { COURSE_IDS, MEAL_IDS, suggestForSlot } from "./plan.js";
 import { enrichManualRecipe, estimateNutrition } from "./import/extract.js";
@@ -403,7 +403,7 @@ app.post("/api/learn/progress", async (c) => {
 });
 
 // ---------------------------------------------------------------------------
-// The cooking coach: a question inside a lesson, and "לבשל עם קורט" (the model
+// The cooking coach: a question from a lesson, a recipe or anywhere, and "לבשל עם קורט" (the model
 // asks, proposes a dish or a meal, then writes it). Nothing is stored here: the
 // conversation lives in the screen, and a built dish is saved as a normal recipe.
 // ---------------------------------------------------------------------------
@@ -413,14 +413,25 @@ const chatBody = z
   .max(40);
 const coachError = (err: unknown) => ({ error: (err as Error).message || "משהו השתבש" });
 
-app.post("/api/learn/ask", async (c) => {
+/** A question to the coach. With lesson_id or recipe_id it is answered in that context. */
+app.post("/api/ask", async (c) => {
+  const caller = c.get("caller");
   const body = z
-    .object({ lesson_id: z.string().max(40).nullable().optional(), messages: chatBody })
+    .object({
+      lesson_id: z.string().max(40).nullable().optional(),
+      recipe_id: z.string().uuid().nullable().optional(),
+      servings: z.number().min(0.25).max(200).nullable().optional(),
+      messages: chatBody,
+    })
     .safeParse(await c.req.json().catch(() => null));
   if (!body.success) return c.json({ error: "bad request" }, 400);
   const lesson = body.data.lesson_id ? lessonById(body.data.lesson_id) ?? null : null;
+  const recipe = body.data.recipe_id
+    ? await one<RecipeRow>("select * from recipes where id = $1 and household_id = $2", [body.data.recipe_id, caller.householdId])
+    : null;
+  if (body.data.recipe_id && !recipe) return c.json({ error: "המתכון לא נמצא" }, 404);
   try {
-    return c.json({ reply: await askLesson(lesson, body.data.messages) });
+    return c.json({ reply: await askCoach({ lesson, recipe, servings: body.data.servings ?? null }, body.data.messages) });
   } catch (err) {
     return c.json(coachError(err), 502);
   }

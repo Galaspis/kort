@@ -14,7 +14,8 @@ import { env } from "./env.js";
 
 /**
  * The cooking coach: the two places where the cook talks with the model.
- *   askLesson  - a question while learning a lesson ("why not olive oil?").
+ *   askCoach   - a question from anywhere: inside a lesson ("why not olive oil?"),
+ *     on a recipe ("what can replace the cream, how much and when?"), or in general.
  *   chefTurn / chefBuild - "לבשל עם קורט": the model asks what there is, for how
  *     many, how much time, proposes a dish or a whole meal, and then writes it.
  * Both stand on the same foundations as the course, and point back at lessons.
@@ -104,7 +105,40 @@ function lessonText(lesson: Lesson): string {
   return parts.join("\n");
 }
 
-const ASK_SYSTEM = `You are Kort, the cooking teacher inside a family's recipe app. The cook is in the middle of a lesson of the app's cooking course and asks you a question. Answer the question that was asked, in two to five sentences: first the direct answer, then the reason (what physically or chemically happens), then, if it helps, one thing to do differently at the stove tonight. If the question is outside the lesson, answer it anyway, briefly. If the cook describes a result that went wrong, diagnose it: name the most likely cause first and how to check it. Do not repeat the lesson back; add to it. If you are not sure, say so.
+/** The recipe the cook is looking at, as the model reads it. Quantities are as stored. */
+export interface AskRecipe {
+  title: string;
+  servings: number | null;
+  ingredients: { name: string; quantity: number | null; unit: string | null; note: string | null; group: string | null }[];
+  steps: { text: string; group: string | null }[];
+  notes: string | null;
+}
+
+function recipeText(recipe: AskRecipe, makingServings: number | null): string {
+  const scaled = makingServings && recipe.servings && makingServings !== recipe.servings;
+  const lines = [`<recipe title="${recipe.title}" written_for_servings="${recipe.servings ?? "unknown"}"${scaled ? ` cook_is_making_servings="${makingServings}"` : ""}>`, "<ingredients>"];
+  for (const i of recipe.ingredients) {
+    lines.push(`${i.group ? `[${i.group}] ` : ""}${[i.quantity, i.unit, i.name].filter((x) => x !== null && x !== "").join(" ")}${i.note ? ` (${i.note})` : ""}`);
+  }
+  lines.push("</ingredients>", "<steps>");
+  recipe.steps.forEach((st, n) => lines.push(`${n + 1}. ${st.group ? `[${st.group}] ` : ""}${st.text}`));
+  lines.push("</steps>");
+  if (recipe.notes?.trim()) lines.push(`<family_notes>${recipe.notes.trim()}</family_notes>`);
+  lines.push("</recipe>");
+  return lines.join("\n");
+}
+
+const ASK_SYSTEM = `You are Kort, the cooking teacher inside a family's recipe app. The cook asks you a question from one of three places: inside a lesson of the app's cooking course, on the page of one of the family's own recipes (possibly while cooking it), or from anywhere else in the app. When there is a lesson or a recipe, it follows this prompt.
+
+Answer the question that was asked, in two to five sentences: first the direct answer, then the reason (what physically or chemically happens), then, if it helps, one thing to do differently at the stove. If you are not sure, say so. If the cook describes a result that went wrong, diagnose it: name the most likely cause first and how to check it.
+
+Inside a lesson: do not repeat the lesson back; add to it. A question outside the lesson is answered anyway, briefly.
+
+On a recipe: the answer is about THIS recipe, its quantities and its steps.
+- Swapping or adding an ingredient: say what to use, how much (worked out from this recipe's own quantities; if the cook is making a different number of servings than the recipe was written for, give the amount for what they are making and say so), at which step it goes in (by its number, "בשלב 3"), and what changes because of it: time, liquid, salt, texture, taste. If the swap does not work in this dish, say so plainly and give the nearest thing that does. If an ingredient can simply be left out, say that.
+- Making ahead, storing, reheating, doubling, a different pan or oven: answer from the recipe's actual steps, naming the step where things change.
+- Do not rewrite the whole recipe. Change only what the question needs.
+- If the question is too open to answer well ("what can I replace?"), ask which ingredient, in one short sentence.
 
 ${VOICE}
 
@@ -113,11 +147,19 @@ ${FOUNDATIONS}
 All lessons of the course (id | number and title | topics):
 ${LESSON_INDEX}`;
 
-export async function askLesson(lesson: Lesson | null, history: ChatMessage[]): Promise<string> {
+export interface AskContext {
+  lesson?: Lesson | null;
+  recipe?: AskRecipe | null;
+  /** How many servings the cook has set on the recipe page, when different from the recipe's own. */
+  servings?: number | null;
+}
+
+export async function askCoach(context: AskContext, history: ChatMessage[]): Promise<string> {
   const messages = toMessages(history);
   if (!messages.length) throw new Error("חסרה שאלה");
   const system: Anthropic.Beta.Messages.BetaTextBlockParam[] = [{ type: "text", text: ASK_SYSTEM, cache_control: { type: "ephemeral" } }];
-  if (lesson) system.push({ type: "text", text: `The lesson the cook is in right now:\n${lessonText(lesson)}` });
+  if (context.lesson) system.push({ type: "text", text: `The lesson the cook is in right now:\n${lessonText(context.lesson)}` });
+  if (context.recipe) system.push({ type: "text", text: `The recipe the cook is asking about:\n${recipeText(context.recipe, context.servings ?? null)}` });
   const response = await client.beta.messages
     .create(request({ max_tokens: 4000, system, messages, output_config: { effort: "low" } }))
     .catch(explain);

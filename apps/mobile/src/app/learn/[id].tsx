@@ -2,8 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { LESSONS, deepLesson, lessonById, type FailureLook, type GuidedDish, type RecipeRow } from "@recipe/shared";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
-import { createElement, useRef, useState } from "react";
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppText, Button, Card, EmptyState, IconButton, Row, Screen } from "@/components/ui";
@@ -11,7 +11,6 @@ import { BrowningSim } from "@/components/learn/browning-sim";
 import { GuidedCook } from "@/components/learn/guided-cook";
 import { SteakArt, type SteakLook } from "@/components/learn/steak-art";
 import { ScrollJumper, useScrollJumper } from "@/components/scroll-jumper";
-import { VideoEmbed } from "@/components/video-embed";
 import { Fonts, Radius, Shadows, Spacing } from "@/constants/theme";
 import { useTheme } from "@/hooks/use-theme";
 import { goBack } from "@/lib/navigation";
@@ -53,7 +52,7 @@ const RATINGS = [
  * One lesson. Short format: idea cards one at a time, a kitchen experiment
  * with a checklist, a short quiz with explanations, then a summary with the
  * recipes in Kort where the principle shows up. Deep format: after the cards
- * come an interactive picture with clips, a guided cook of a real dish, the
+ * come an interactive picture with the signs to look for, a guided cook of a real dish, the
  * common failures, and a longer quiz. "שאלה" in the top bar opens the coach.
  */
 export default function LessonScreen() {
@@ -259,39 +258,17 @@ export default function LessonScreen() {
           </View>
         ) : null}
 
-        {/* Deep stage: see it. The interactive picture, then what it should look like in the pan. */}
+        {/* Deep stage: see it. The interactive picture, then the signs to recognise in the pan. */}
         {stage === "see" && deep ? (
           <View style={{ gap: Spacing.md }}>
             <AppText color="textSecondary">{deep.visualIntro}</AppText>
             {deep.visual === "browning" ? <BrowningSim /> : null}
 
-            <AppText variant="subheading">איך זה נראה במחבת</AppText>
-            {deep.clips.map((clip) => (
-              <Card key={clip.id} style={styles.clip}>
-                {clip.video ? (
-                  Platform.OS === "web" ? (
-                    createElement("video", {
-                      src: clip.video,
-                      controls: true,
-                      loop: true,
-                      muted: true,
-                      playsInline: true,
-                      preload: "metadata",
-                      style: { width: "100%", borderRadius: 12, backgroundColor: "black" },
-                    })
-                  ) : (
-                    <VideoEmbed url={clip.video} />
-                  )
-                ) : (
-                  <View style={[styles.clipEmpty, { backgroundColor: theme.elevated }]}>
-                    <Ionicons name="videocam-outline" size={22} color={theme.textMuted} />
-                    <AppText variant="caption" color="textMuted">
-                      הסרטון בהכנה
-                    </AppText>
-                  </View>
-                )}
-                <AppText variant="label">{clip.title}</AppText>
-                <AppText color="textSecondary">{clip.look}</AppText>
+            <AppText variant="subheading">הסימנים במחבת</AppText>
+            {deep.signs.map((sign) => (
+              <Card key={sign.id} style={styles.sign}>
+                <AppText variant="label">{sign.title}</AppText>
+                <AppText color="textSecondary">{sign.look}</AppText>
               </Card>
             ))}
 
@@ -544,8 +521,7 @@ const styles = StyleSheet.create({
   topBar: { paddingHorizontal: Spacing.sm, justifyContent: "space-between" },
   stageDot: { height: 8, borderRadius: 4 },
   ask: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 7, paddingHorizontal: 11, borderRadius: Radius.pill },
-  clip: { padding: Spacing.sm + 4, gap: 6 },
-  clipEmpty: { height: 120, borderRadius: Radius.sm, alignItems: "center", justifyContent: "center", gap: 6 },
+  sign: { padding: Spacing.sm + 4, gap: 4 },
   dish: {
     flexDirection: "row",
     alignItems: "center",

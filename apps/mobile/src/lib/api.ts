@@ -142,8 +142,8 @@ export const api = {
   learnProgress: () => request<LessonProgress[]>("/api/learn/progress"),
   completeLesson: (lesson_id: string, quiz_score: number | null, cook_rating: number | null = null) =>
     request<{ ok: true }>("/api/learn/progress", { method: "POST", body: JSON.stringify({ lesson_id, quiz_score, cook_rating }) }),
-  askLesson: (lesson_id: string | null, messages: ChatMsg[]) =>
-    request<{ reply: string }>("/api/learn/ask", { method: "POST", body: JSON.stringify({ lesson_id, messages }) }),
+  ask: (context: { lesson_id?: string | null; recipe_id?: string | null; servings?: number | null }, messages: ChatMsg[]) =>
+    request<{ reply: string }>("/api/ask", { method: "POST", body: JSON.stringify({ ...context, messages }) }),
   chefTurn: (messages: ChatMsg[]) => request<ChefTurn>("/api/chef/turn", { method: "POST", body: JSON.stringify({ messages }) }),
   chefBuild: (messages: ChatMsg[], proposal: ChefProposal) =>
     request<ChefBuilt>("/api/chef/build", { method: "POST", body: JSON.stringify({ messages, proposal }) }),
